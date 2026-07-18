@@ -69,7 +69,12 @@ export function attachEvidence(args: AttachEvidenceArgs, deps: AttachEvidenceDep
   const existing = readJson<Evidence>(recordPath);
   if (existing !== null) {
     appendEvent(gateDir, { tool: "attach_evidence", result: "ok", evidenceId, alreadyAttached: true });
-    return { status: "ok", state: existing, nextSteps: ["attach_evidence"] };
+    return {
+      status: "ok",
+      state: existing,
+      note: `既添付の証拠(添付: ${existing.attachedAt})。同じビルド・同じ観測ファイルは1件に収束する`,
+      nextSteps: ["attach_evidence"],
+    };
   }
 
   const storedFile = join(gateDir, "evidence", `${evidenceId}${extname(args.file)}`);

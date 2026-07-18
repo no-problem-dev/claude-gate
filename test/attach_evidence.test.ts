@@ -55,6 +55,8 @@ describe("registerBuild", () => {
     if (first.status !== "ok" || second.status !== "ok") throw new Error("expected ok");
     expect(second.state.buildId).toBe(first.state.buildId);
     expect(second.state.registeredAt).toBe(first.state.registeredAt);
+    expect(first.note).toBeUndefined(); // 初回は既登録ではない
+    expect(second.note).toContain("既登録"); // 再登録は応答で明示される(記録は不変)
   });
 
   it(".app 以外は reason と fix つきで拒否される", () => {
@@ -99,7 +101,9 @@ describe("attachEvidence — 出所照合", () => {
     const deps = { installedAppPath: () => newApp };
 
     attachEvidence(attachArgs(registered.state.buildId), deps);
-    attachEvidence(attachArgs(registered.state.buildId), deps);
+    const second = attachEvidence(attachArgs(registered.state.buildId), deps);
+    if (second.status !== "ok") throw new Error("expected ok");
+    expect(second.note).toContain("既添付");
 
     const records = readdirSync(join(repoDir(), "evidence")).filter((f) => f.endsWith(".json"));
     expect(records.length).toBe(1);

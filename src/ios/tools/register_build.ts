@@ -34,7 +34,12 @@ export function registerBuild(args: RegisterBuildArgs): Reply<Build> {
   const existing = readJson<Build>(recordPath);
   if (existing !== null) {
     appendEvent(gateDir, { tool: "register_build", result: "ok", buildId, alreadyRegistered: true });
-    return { status: "ok", state: existing, nextSteps: ["attach_evidence"] };
+    return {
+      status: "ok",
+      state: existing,
+      note: `既登録のビルド(登録: ${existing.registeredAt})。記録の gitSha / dirty は最初の登録時のもの`,
+      nextSteps: ["attach_evidence"],
+    };
   }
 
   const build: Build = {

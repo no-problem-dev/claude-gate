@@ -7,7 +7,7 @@ AI との iOS 開発で、エージェントの「できました」に証拠を
 - `ios-domain-model.md` — ドメインモデル(完了報告と証拠・対訳表)
 - `ios-task-loop.md` — タスク一枚のループ(変更の種類 → 最低限の確かめ方)
 - `ios-gate-implementation.md` — 実装方針(素通し / 採用時に確かめる / ゲートのみ)
-- `ios-parallel.md` — 並列と冪等(デーモン1台・状態は `.git/gate/`・全操作べき等)
+- `ios-parallel.md` — 並列と冪等(デーモン1台・全操作べき等)
 - `ios-gate-spec.md` — スライス1実装仕様
 
 ## いま出来ること(スライス1)
@@ -21,12 +21,12 @@ AI との iOS 開発で、エージェントの「できました」に証拠を
 ## セットアップ
 
 ```bash
-npm install
-npm test
-./scripts/install.sh   # ビルド + launchd 常駐 + 稼働確認
+npm install && npm run build
+node dist/cli.js install   # launchd 常駐 + 稼働確認(将来: npm i -g claude-gate → claude-gate install)
+node dist/cli.js doctor    # 稼働状態とデータの場所
 ```
 
-対象プロジェクトの `.mcp.json`:
+対象プロジェクトの `.mcp.json`(または claude-gate プラグイン):
 
 ```json
 {
@@ -36,4 +36,16 @@ npm test
 }
 ```
 
-状態は各リポジトリの `.git/gate/`(builds / evidence / events.jsonl)に置かれる。worktree を消しても残る。
+## データの場所
+
+ローカルデータは `~/.claude-gate/` に置く(普通のアプリと同じ):
+
+```
+~/.claude-gate/
+  repos.json               # 既知リポジトリの台帳
+  repos/<repoKey>/         # リポジトリごとの状態(repoKey = git 共有ディレクトリの実パスのハッシュ)
+    builds/  evidence/  events.jsonl
+  logs/
+```
+
+リポジトリの同定は git 共有ディレクトリの実パスで行うため、worktree をいくつ作って消しても状態は同じ場所に残る。

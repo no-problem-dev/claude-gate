@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, readFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import { appendEvent } from "../../kernel/audit.js";
-import { gateDirOf, readJson, writeJson } from "../../kernel/store.js";
+import { readJson, repoDirOf, writeJson } from "../../kernel/store.js";
 import { buildIdOf, shortBuildId } from "../build_id.js";
 import { installedAppPath } from "../simulator.js";
 import type { Build, Evidence, EvidenceKind, Reply } from "../words.js";
@@ -24,7 +24,7 @@ export interface AttachEvidenceDeps {
 const defaultDeps: AttachEvidenceDeps = { installedAppPath };
 
 export function attachEvidence(args: AttachEvidenceArgs, deps: AttachEvidenceDeps = defaultDeps): Reply<Evidence> {
-  const gateDir = gateDirOf(args.worksitePath);
+  const gateDir = repoDirOf(args.worksitePath);
   const reject = (reason: string, fix: string): Reply<Evidence> => {
     appendEvent(gateDir, { tool: "attach_evidence", result: "rejected", buildId: args.buildId, reason });
     return { status: "rejected", reason, fix, nextSteps: ["register_build", "attach_evidence"] };

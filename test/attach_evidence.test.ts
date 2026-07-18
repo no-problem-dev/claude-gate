@@ -13,6 +13,13 @@ let newApp: string;
 let oldApp: string;
 let screenshot: string;
 
+function repoDir(): string {
+  const reposRoot = join(process.env.GATE_HOME as string, "repos");
+  const keys = readdirSync(reposRoot);
+  if (keys.length !== 1) throw new Error(`expected 1 repo, got ${keys.length}`);
+  return join(reposRoot, keys[0]);
+}
+
 function makeApp(dir: string, name: string, binary: string): string {
   const app = join(dir, name);
   mkdirSync(app, { recursive: true });
@@ -22,6 +29,7 @@ function makeApp(dir: string, name: string, binary: string): string {
 }
 
 beforeEach(() => {
+  process.env.GATE_HOME = mkdtempSync(join(tmpdir(), "gate-home-"));
   worksite = mkdtempSync(join(tmpdir(), "gate-worksite-"));
   execFileSync("git", ["-C", worksite, "init", "-q"]);
   const artifacts = mkdtempSync(join(tmpdir(), "gate-artifacts-"));
@@ -93,8 +101,7 @@ describe("attachEvidence — 出所照合", () => {
     attachEvidence(attachArgs(registered.state.buildId), deps);
     attachEvidence(attachArgs(registered.state.buildId), deps);
 
-    const gateDir = join(worksite, ".git", "gate");
-    const records = readdirSync(join(gateDir, "evidence")).filter((f) => f.endsWith(".json"));
+    const records = readdirSync(join(repoDir(), "evidence")).filter((f) => f.endsWith(".json"));
     expect(records.length).toBe(1);
   });
 
@@ -111,7 +118,7 @@ describe("attachEvidence — 出所照合", () => {
     attachEvidence(attachArgs(registered.state.buildId), { installedAppPath: () => oldApp });
     attachEvidence(attachArgs(registered.state.buildId), { installedAppPath: () => newApp });
 
-    const lines = readFileSync(join(worksite, ".git", "gate", "events.jsonl"), "utf8")
+    const lines = readFileSync(join(repoDir(), "events.jsonl"), "utf8")
       .trim()
       .split("\n")
       .map((l) => JSON.parse(l));

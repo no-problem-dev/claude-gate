@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { appendEvent } from "../../kernel/audit.js";
-import { gateDirOf, readJson, writeJson } from "../../kernel/store.js";
+import { readJson, repoDirOf, writeJson } from "../../kernel/store.js";
 import { buildIdOf, shortBuildId } from "../build_id.js";
 import type { Build, Reply } from "../words.js";
 
@@ -14,7 +14,7 @@ export interface RegisterBuildArgs {
 }
 
 export function registerBuild(args: RegisterBuildArgs): Reply<Build> {
-  const gateDir = gateDirOf(args.worksitePath);
+  const gateDir = repoDirOf(args.worksitePath);
 
   if (!existsSync(args.appPath) || !statSync(args.appPath).isDirectory() || !args.appPath.endsWith(".app")) {
     const reason = `appPath が .app ディレクトリではない: ${args.appPath}`;

@@ -1,16 +1,35 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
-// 状態は git 共有ディレクトリ配下に置く(全 worktree から同じ場所に解決され、worktree 削除に耐える)
-export function gateDirOf(worksitePath: string): string {
+// ローカルデータは普通のアプリとして ~/.claude-gate に置く(テストは GATE_HOME で差し替える)
+export function gateHome(): string {
+  return process.env.GATE_HOME ?? join(homedir(), ".claude-gate");
+}
+
+// リポジトリの同定: git 共有ディレクトリの実パス。
+// 全 worktree から同じ値に解決され、worktree を削除しても状態が残る。
+export function repoDirOf(worksitePath: string): string {
   const common = execFileSync("git", ["-C", worksitePath, "rev-parse", "--git-common-dir"], {
     encoding: "utf8",
   }).trim();
-  const dir = join(resolve(worksitePath, common), "gate");
+  const commonAbs = realpathSync(resolve(worksitePath, common));
+  const repoKey = createHash("sha256").update(commonAbs).digest("hex").slice(0, 12);
+  const dir = join(gateHome(), "repos", repoKey);
   mkdirSync(join(dir, "builds"), { recursive: true });
   mkdirSync(join(dir, "evidence"), { recursive: true });
+  registerRepo(repoKey, commonAbs);
   return dir;
+}
+
+// ダッシュボード用の台帳: どのキーがどのリポジトリか
+function registerRepo(repoKey: string, commonDir: string): void {
+  const path = join(gateHome(), "repos.json");
+  const registry = readJson<Record<string, { commonDir: string; lastSeenAt: string }>>(path) ?? {};
+  registry[repoKey] = { commonDir, lastSeenAt: new Date().toISOString() };
+  writeJson(path, registry);
 }
 
 export function readJson<T>(path: string): T | null {

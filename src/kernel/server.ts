@@ -1,9 +1,13 @@
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
 import { z } from "zod";
 import { attachEvidence } from "../ios/tools/attach_evidence.js";
 import { registerBuild } from "../ios/tools/register_build.js";
+import { evidenceFilePath, overview, repoDetail } from "./api.js";
 
 // ゲートはマシンに1プロセス(単一プロセスなので状態の書き込みは直列)。
 // セッションごとの状態は持たない: 全ツールが対象を明示引数で受ける。
@@ -26,7 +30,7 @@ const asReply = (run: () => unknown) => {
 };
 
 function newServer(): McpServer {
-  const server = new McpServer({ name: "claude-gate", version: "0.1.0" });
+  const server = new McpServer({ name: "claude-gate", version: "0.2.0" });
 
   server.registerTool(
     "ping",
@@ -74,7 +78,7 @@ const app = express();
 app.use(express.json({ limit: "20mb" }));
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, name: "claude-gate", version: "0.1.0", pid: process.pid });
+  res.json({ ok: true, name: "claude-gate", version: "0.2.0", pid: process.pid });
 });
 
 app.post("/mcp", async (req, res) => {
@@ -90,6 +94,40 @@ app.post("/mcp", async (req, res) => {
   await server.connect(transport);
   await transport.handleRequest(req, res, req.body);
 });
+
+// --- ダッシュボード(人間向け・読み取り専用) ---
+
+app.get("/api/overview", (_req, res) => {
+  res.json(overview());
+});
+
+app.get("/api/repos/:repoKey", (req, res) => {
+  const detail = repoDetail(req.params.repoKey);
+  if (detail === null) {
+    res.status(404).json({ error: "unknown repo" });
+    return;
+  }
+  res.json(detail);
+});
+
+app.get("/api/evidence/:repoKey/:evidenceId/file", (req, res) => {
+  const path = evidenceFilePath(req.params.repoKey, req.params.evidenceId);
+  if (path === null) {
+    res.status(404).json({ error: "unknown evidence" });
+    return;
+  }
+  res.sendFile(path);
+});
+
+// ビルド済みダッシュボード(dashboard/dist)を / で配信する
+const dashboardDist = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "dashboard", "dist");
+if (existsSync(dashboardDist)) {
+  app.use(express.static(dashboardDist));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api") || req.path.startsWith("/mcp")) return next();
+    res.sendFile(join(dashboardDist, "index.html"));
+  });
+}
 
 const port = Number(process.env.GATE_PORT ?? 7350);
 app.listen(port, "127.0.0.1", () => {

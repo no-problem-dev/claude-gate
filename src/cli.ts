@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -77,6 +77,7 @@ async function waitForHealth(): Promise<void> {
       if (res.ok) {
         console.log(await res.text());
         console.log("claude-gate is running");
+        console.log(`dashboard: http://127.0.0.1:${port}/`);
         return;
       }
     } catch {
@@ -87,16 +88,55 @@ async function waitForHealth(): Promise<void> {
   throw new Error(`claude-gate が ${port} で応答しない。${join(gateHome(), "logs")} を確認してください`);
 }
 
+// マシン再起動後・調子が悪い時にこれ一発で全部の状態が分かる(直し方も出す)
 async function doctor(): Promise<void> {
-  console.log(`data:   ${gateHome()}`);
-  console.log(`server: http://127.0.0.1:${port}/mcp`);
+  let healthy = true;
+  const check = (ok: boolean, label: string, detail: string, fix?: string) => {
+    console.log(`${ok ? "✓" : "✗"} ${label}: ${detail}`);
+    if (!ok) {
+      healthy = false;
+      if (fix) console.log(`    → ${fix}`);
+    }
+  };
+
+  console.log(`data: ${gateHome()}`);
+
+  const plistPath = join(homedir(), "Library", "LaunchAgents", `${label}.plist`);
+  check(
+    existsSync(plistPath),
+    "launchd 登録",
+    existsSync(plistPath) ? plistPath : "plist がない",
+    "claude-gate install を実行してください",
+  );
+
   try {
     const res = await fetch(`http://127.0.0.1:${port}/health`);
-    console.log(`health: ${await res.text()}`);
+    check(res.ok, "デーモン", await res.text());
   } catch (error) {
-    console.log(`health: 接続できない(${String(error)})。claude-gate install で常駐させてください`);
-    process.exitCode = 1;
+    check(false, "デーモン", `接続できない(${String(error)})`, "claude-gate install で常駐させてください");
   }
+
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/overview`);
+    const body = (await res.json()) as { repos: unknown[] };
+    check(res.ok, "ダッシュボード", `http://127.0.0.1:${port}/ (リポジトリ ${body.repos.length} 件)`);
+  } catch {
+    check(false, "ダッシュボード", "API が応答しない", "npm run build 後に claude-gate install で再起動してください");
+  }
+
+  try {
+    const list = execFileSync("claude", ["plugin", "list"], { encoding: "utf8" });
+    check(
+      list.includes("claude-gate@"),
+      "Claude Code プラグイン",
+      list.includes("claude-gate@") ? "導入済み(gate MCP + gate-loop スキル)" : "未導入",
+      "claude plugin install claude-gate@taniguchi-kyoichi を実行してください",
+    );
+  } catch {
+    check(false, "Claude Code プラグイン", "claude CLI が見つからない", "Claude Code をインストールしてください");
+  }
+
+  if (!healthy) process.exitCode = 1;
 }
 
 function help(): void {
@@ -104,5 +144,5 @@ function help(): void {
 
   serve    サーバをこのプロセスで起動する(開発用)
   install  launchd に常駐させる(べき等)
-  doctor   稼働状態とデータの場所を表示する`);
+  doctor   稼働状態を点検する(デーモン/ダッシュボード/プラグイン)`);
 }

@@ -40,8 +40,8 @@ export interface Evidence {
   dirty?: boolean;
 }
 
-// 完了報告の状態(ドメインモデル §3.2)。提出済み(submitted)はスライス3 で追加
-export type ReportState = "draft" | "evidenced" | "passed" | "failed" | "unconfirmed";
+// 完了報告の状態(ドメインモデル §3.2)。提出済み(submitted)が終着
+export type ReportState = "draft" | "evidenced" | "passed" | "failed" | "unconfirmed" | "submitted";
 
 // 確かめ方の語彙(ios-task-loop.md §3 対応表と 1:1)。
 // 自由文字列だと判定(2b)で下限と比較できない — 語彙外の確かめ方は宣言に使えない
@@ -124,7 +124,16 @@ export interface Judgment {
   verdict: "passed" | "failed" | "unconfirmed";
   behaviors: BehaviorVerdict[];
   reasons: string[]; // 報告レベルの理由(ビルド混在・同一ソース不明 等)
+  sourceSha: string | null; // 検証したソース。submit が HEAD と照合する。dirty 検証は null
   judgedAt: string;
+}
+
+// 提出の記録: submit が報告に保存する(FSM の終着)
+export interface Submission {
+  sha: string;
+  branch: string;
+  remote: string;
+  pushedAt: string;
 }
 
 // 完了報告: エージェントの「できました」の型。動作一覧はオープン時に固定(変えたいなら別の作業名で開く)
@@ -137,6 +146,7 @@ export interface Report {
   buildIds: string[]; // 紐づいた証拠の由来ビルド(重複なし)
   openedAt: string;
   judgment?: Judgment;
+  submission?: Submission;
 }
 
 // 全ツール共通の応答。rejected は reason(何がダメか)+ fix(どうすれば通るか)を必ず持つ。

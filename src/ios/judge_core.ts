@@ -26,6 +26,7 @@ export interface JudgeResult {
   verdict: "passed" | "failed" | "unconfirmed";
   behaviors: BehaviorVerdict[];
   reasons: string[];
+  sourceSha: string | null;
 }
 
 // 確かめ方 → 適合する証拠の種類(覆いの照合表)
@@ -140,8 +141,17 @@ export function judgeReport(input: JudgeInput): JudgeResult {
     }
   }
 
+  // 検証したソース(sourceSha): submit が HEAD と照合する。単一に確定しないときは null
+  let sourceSha: string | null = null;
+  if (checkRuns.length > 0 && runShas.length === 1 && !checkRuns.some((e) => e.dirty === true)) {
+    sourceSha = checkRuns[0].gitSha ?? null;
+  } else if (checkRuns.length === 0 && simBuildIds.length === 1 && simBuildIds[0] !== undefined) {
+    const build = buildsById[simBuildIds[0]];
+    if (build !== undefined && !build.dirty) sourceSha = build.gitSha;
+  }
+
   const anyNg = behaviors.some((b) => b.verdict === "ng");
   const anyUnconfirmed = behaviors.some((b) => b.verdict === "unconfirmed");
   const verdict = anyNg ? "failed" : anyUnconfirmed || reasons.length > 0 ? "unconfirmed" : "passed";
-  return { verdict, behaviors, reasons };
+  return { verdict, behaviors, reasons, sourceSha };
 }

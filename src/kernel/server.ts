@@ -11,6 +11,7 @@ import { judge } from "../ios/tools/judge.js";
 import { openReport } from "../ios/tools/open_report.js";
 import { registerBuild } from "../ios/tools/register_build.js";
 import { runCheck } from "../ios/tools/run_check.js";
+import { submit } from "../ios/tools/submit.js";
 import { CHANGE_KINDS, CHECK_KINDS } from "../ios/words.js";
 import { evidenceFilePath, overview, repoDetail } from "./api.js";
 
@@ -35,7 +36,7 @@ const asReply = (run: () => unknown) => {
 };
 
 function newServer(): McpServer {
-  const server = new McpServer({ name: "claude-gate", version: "0.9.0" });
+  const server = new McpServer({ name: "claude-gate", version: "0.10.0" });
 
   server.registerTool(
     "ping",
@@ -136,6 +137,19 @@ function newServer(): McpServer {
     async (args) => asReply(() => judge(args)),
   );
 
+  server.registerTool(
+    "submit",
+    {
+      description:
+        "提出する。合格した報告の、検証されたそのソース(sourceSha = HEAD)だけを git push origin HEAD する。合格していない報告・検証後にコミットが動いた状態では提出できない。提出済みの報告は終着(証拠の追加も不可)",
+      inputSchema: {
+        worksitePath: z.string().describe("作業場(worktree)のパス"),
+        reportId: z.string().describe("提出する報告(合格している必要がある)"),
+      },
+    },
+    async (args) => asReply(() => submit(args)),
+  );
+
   return server;
 }
 
@@ -143,7 +157,7 @@ const app = express();
 app.use(express.json({ limit: "20mb" }));
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, name: "claude-gate", version: "0.9.0", pid: process.pid });
+  res.json({ ok: true, name: "claude-gate", version: "0.10.0", pid: process.pid });
 });
 
 app.post("/mcp", async (req, res) => {

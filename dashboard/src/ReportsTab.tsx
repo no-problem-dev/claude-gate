@@ -107,6 +107,14 @@ function ReportCard({
         </span>
       </header>
 
+      {report.submission !== undefined && (
+        <p className="mt-3 rounded-xl border border-green-600/30 bg-green-600/8 p-3 text-[13px]">
+          {report.submission.remote}/{report.submission.branch} へ{" "}
+          <span className="font-mono">{report.submission.sha.slice(0, 7)}</span> を push 済み(
+          {formatTime(report.submission.pushedAt)})。検証したソースと同一であることをゲートが照合した上での提出。
+        </p>
+      )}
+
       {report.judgment !== undefined && report.judgment.reasons.length > 0 && (
         <ul className="mt-3 grid gap-1 rounded-xl border border-amber-500/40 bg-amber-500/8 p-3 text-[13px]">
           {report.judgment.reasons.map((reason, i) => (

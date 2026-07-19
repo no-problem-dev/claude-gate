@@ -106,6 +106,11 @@ export function GuideView() {
             合格 / 不合格 / 確認できず を決める。動かしたエージェント自身は判定しない。
             証拠が複数ビルドやソースにまたがる報告は合格にならない(確認できず)。
           </Step>
+          <Step n={8} name="提出" en="submit">
+            合格した報告の、<strong>検証されたそのソース(HEAD が判定時の sha と一致)</strong>だけを
+            git push できる。検証後にコミットが動いていたら拒否 — 「別物を見て OK」の提出版を締める。
+            提出済みの報告は終着(証拠の追加も不可)。
+          </Step>
         </ol>
         <div className="mt-3 flex flex-wrap gap-2">
           <Chip size="sm" color="default">実行は自由、採用は厳格</Chip>
@@ -185,12 +190,13 @@ export function GuideView() {
             決定論の判定(judge)・ゲートによる確かめの実行(run_check)・リポジトリ内の宣言 gate.yaml・
             見えないこと台帳。見えない動作への OK は「確認できず」に変換され、人間に渡る
           </StatusRow>
-          <StatusRow chip={<Chip size="sm" color="default">次</Chip>} name="提出の一本化(スライス3)">
-            合格した報告だけが push / PR できる。それまでの提出判断は人間
+          <StatusRow chip={<Chip size="sm" color="success">稼働中</Chip>} name="提出の一本化(スライス3)+ 掃除(2c)">
+            合格した報告の検証済みソースだけが push できる(submit)。PR 作成は次の実タスクで。
+            記録の掃除は人間の CLI(claude-gate forget)— エージェントは記録を消せない
           </StatusRow>
         </div>
         <h3 className="mt-6 mb-2 text-[13px] font-semibold">
-          全体像 — 完了報告の一生(判定まで稼働中。提出済みはスライス3)
+          全体像 — 完了報告の一生(全状態が稼働中)
         </h3>
         <Card className="p-4">
           <ReportStateDiagram />

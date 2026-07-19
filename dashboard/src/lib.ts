@@ -13,9 +13,12 @@ export interface GateEvent {
   check?: string;
   exitCode?: number;
   verdict?: string;
+  sha?: string;
+  branch?: string;
   alreadyRegistered?: boolean;
   alreadyAttached?: boolean;
   alreadyOpened?: boolean;
+  alreadySubmitted?: boolean;
 }
 
 export interface RepoSummary {
@@ -60,7 +63,7 @@ export interface Evidence {
   dirty?: boolean;
 }
 
-export type ReportState = "draft" | "evidenced" | "passed" | "failed" | "unconfirmed";
+export type ReportState = "draft" | "evidenced" | "passed" | "failed" | "unconfirmed" | "submitted";
 
 export interface BehaviorEntry {
   behavior: string;
@@ -78,7 +81,15 @@ export interface Judgment {
   verdict: "passed" | "failed" | "unconfirmed";
   behaviors: BehaviorVerdict[];
   reasons: string[];
+  sourceSha?: string | null;
   judgedAt: string;
+}
+
+export interface Submission {
+  sha: string;
+  branch: string;
+  remote: string;
+  pushedAt: string;
 }
 
 export interface Report {
@@ -90,6 +101,7 @@ export interface Report {
   buildIds: string[];
   openedAt: string;
   judgment?: Judgment;
+  submission?: Submission;
 }
 
 export const REPORT_STATE_LABEL: Record<ReportState, string> = {
@@ -98,6 +110,7 @@ export const REPORT_STATE_LABEL: Record<ReportState, string> = {
   passed: "合格",
   failed: "不合格",
   unconfirmed: "確認できず",
+  submitted: "提出済み",
 };
 
 export const REPORT_STATE_COLOR: Record<ReportState, "default" | "accent" | "success" | "danger" | "warning"> = {
@@ -106,6 +119,7 @@ export const REPORT_STATE_COLOR: Record<ReportState, "default" | "accent" | "suc
   passed: "success",
   failed: "danger",
   unconfirmed: "warning",
+  submitted: "success",
 };
 
 // 確かめ方の語彙(ゲート words.ts と 1:1)。語彙導入前の記録は識別子のまま表示される
@@ -238,6 +252,13 @@ export function eventSentence(event: GateEvent): string {
   if (event.tool === "judge") {
     const verdict = REPORT_STATE_LABEL[event.verdict as ReportState] ?? event.verdict;
     return event.result === "ok" ? `判定した — ${verdict}` : "判定を拒否";
+  }
+  if (event.tool === "submit") {
+    if (event.result !== "ok") return "提出を拒否";
+    return event.alreadySubmitted ? "提出(既提出の返却)" : `提出した — ${event.branch ?? ""} を push`;
+  }
+  if (event.tool === "forget") {
+    return "記録を掃除(人間の操作)";
   }
   if (event.tool === "report_state") {
     return `報告が「${REPORT_STATE_LABEL[event.state as ReportState] ?? event.state}」になった`;

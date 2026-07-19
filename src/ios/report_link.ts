@@ -19,6 +19,12 @@ export function validateLink(
   if (report === null) {
     return { reason: `報告 ${reportId} が未オープン`, fix: "先に open_report で報告を開いてください" };
   }
+  if (report.state === "submitted") {
+    return {
+      reason: `報告「${report.title}」は提出済みで、もう変わらない`,
+      fix: "続きの作業は新しい作業名で報告を開いてください",
+    };
+  }
   if (!Number.isInteger(behaviorIndex) || behaviorIndex < 1 || behaviorIndex > report.behaviors.length) {
     return {
       reason: `動作の番号 ${behaviorIndex} が範囲外(この報告の動作一覧は 1〜${report.behaviors.length})`,

@@ -59,7 +59,13 @@
 - **できごとは文で書く**: 「証拠を受理」「ビルドを登録(既存の記録を返却)」「証拠を拒否 — シミュレータ内は別のビルド」。ツールの英語名は出さない
 - **状態の色**: 受理 = good green / 拒否 = critical red。色+アイコン+ラベルを常に併記(dataviz 検証済みパレット)。dirty は warning(黄)
 - **時刻**: 24時間以内は相対(「14分前」)+ hover で絶対時刻、それより古いものは絶対表記
-- **ライト/ダーク両対応**(prefers-color-scheme)
+- **ライト/ダーク両対応**(prefers-color-scheme。index.html のスクリプトが html の class/data-theme に反映)
+
+### 表現基盤(コンポーネントライブラリ)
+
+- 見た目の基盤は **HeroUI v3**(React 19 + Tailwind CSS v4)。Tabs / Card / Chip / Button を使い、レイアウトは Tailwind ユーティリティで組む
+- 状態の色は HeroUI のセマンティックカラーに割り当てる: 受理 = `success` / 拒否 = `danger` / dirty = `warning`。色+アイコン+ラベル併記の原則は変えない
+- 固有スタイル(ビルドの色ドット・ノートのクランプ等)だけ styles.css に置く。それ以外のカスタム CSS は増やさない
 
 ## 5. やらないこと
 

@@ -30,7 +30,7 @@ const asReply = (run: () => unknown) => {
 };
 
 function newServer(): McpServer {
-  const server = new McpServer({ name: "claude-gate", version: "0.3.0" });
+  const server = new McpServer({ name: "claude-gate", version: "0.4.0" });
 
   server.registerTool(
     "ping",
@@ -78,7 +78,7 @@ const app = express();
 app.use(express.json({ limit: "20mb" }));
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, name: "claude-gate", version: "0.3.0", pid: process.pid });
+  res.json({ ok: true, name: "claude-gate", version: "0.4.0", pid: process.pid });
 });
 
 app.post("/mcp", async (req, res) => {

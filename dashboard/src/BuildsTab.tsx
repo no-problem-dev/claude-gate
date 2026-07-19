@@ -1,3 +1,4 @@
+import { Card, Chip } from "@heroui/react";
 import { useMemo } from "react";
 import { Build, Evidence, RepoDetail, buildTitle, eventSentence, formatTime } from "./lib";
 import { AcceptBadge, BuildDot, DirtyChip, RejectBadge, Time } from "./components";
@@ -28,38 +29,44 @@ export function BuildsTab({
   const selected = detail.builds.find((b) => b.buildId === selectedBuildId) ?? null;
 
   if (detail.builds.length === 0) {
-    return <p className="muted pad">登録されたビルドはまだありません</p>;
+    return <p className="p-6 text-zinc-500 dark:text-zinc-400">登録されたビルドはまだありません</p>;
   }
 
   return (
-    <div className="master-detail">
-      <ol className="build-master" aria-label="ビルド一覧">
-        {detail.builds.map((build) => {
-          const evidenceCount = evidenceByBuild.get(build.buildId)?.length ?? 0;
-          return (
-            <li key={build.buildId}>
-              <button
-                className={build.buildId === selectedBuildId ? "build-row selected" : "build-row"}
-                onClick={() => onSelectBuild(build.buildId)}
-              >
-                <BuildDot buildId={build.buildId} />
-                <div className="build-row-body">
-                  <div className="build-row-head">
-                    <span className="build-row-title">{buildTitle(build)}</span>
-                    {build.dirty && <DirtyChip />}
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(260px,340px)_1fr]">
+      <Card className="overflow-hidden p-0">
+        <ol aria-label="ビルド一覧">
+          {detail.builds.map((build, i) => {
+            const evidenceCount = evidenceByBuild.get(build.buildId)?.length ?? 0;
+            return (
+              <li key={build.buildId} className={i > 0 ? "border-t border-black/8 dark:border-white/8" : ""}>
+                <button
+                  className={`flex w-full cursor-pointer items-center gap-2.5 px-3.5 py-3 text-left transition-colors hover:bg-black/4 dark:hover:bg-white/5 ${
+                    build.buildId === selectedBuildId
+                      ? "bg-black/5 shadow-[inset_3px_0_0] shadow-blue-500 dark:bg-white/8"
+                      : ""
+                  }`}
+                  onClick={() => onSelectBuild(build.buildId)}
+                >
+                  <BuildDot buildId={build.buildId} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold whitespace-nowrap">{buildTitle(build)}</span>
+                      {build.dirty && <DirtyChip />}
+                    </div>
+                    <div className="font-mono text-xs text-zinc-500 dark:text-zinc-400">
+                      {build.gitSha ? build.gitSha.slice(0, 7) : "コミットなし"} · {build.buildId.slice(0, 6)}
+                    </div>
                   </div>
-                  <div className="muted small mono">
-                    {build.gitSha ? build.gitSha.slice(0, 7) : "コミットなし"} · {build.buildId.slice(0, 6)}
-                  </div>
-                </div>
-                <span className={evidenceCount > 0 ? "count-badge" : "count-badge zero"}>
-                  証拠 {evidenceCount}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ol>
+                  <Chip color={evidenceCount > 0 ? "success" : "default"} size="sm">
+                    証拠 {evidenceCount}
+                  </Chip>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </Card>
 
       {selected !== null && (
         <BuildDetail
@@ -87,38 +94,31 @@ function BuildDetail({
   const ownEvents = detail.events.filter((e) => e.buildId === build.buildId);
 
   return (
-    <article className="build-detail" aria-label="ビルドの詳細">
-      <header className="build-detail-head">
+    <Card className="min-w-0 p-5" aria-label="ビルドの詳細">
+      <header className="flex flex-wrap items-center gap-2.5">
         <BuildDot buildId={build.buildId} size={12} />
-        <h3>{buildTitle(build)}</h3>
+        <h3 className="text-base font-semibold">{buildTitle(build)}</h3>
         {build.dirty && <DirtyChip />}
       </header>
 
-      <dl className="facts">
-        <div>
-          <dt>コミット</dt>
-          <dd className="mono">
-            {build.gitSha ? build.gitSha.slice(0, 10) : "なし"}
-            {build.dirty && <span className="muted">(+未コミットの変更)</span>}
-          </dd>
-        </div>
-        <div>
-          <dt>登録</dt>
-          <dd>{formatTime(build.registeredAt)}</dd>
-        </div>
-        <div>
-          <dt>ビルドID</dt>
-          <dd className="mono" title={build.buildIdFull}>
+      <dl className="mt-3 flex flex-wrap gap-x-7 gap-y-2">
+        <Fact label="コミット">
+          <span className="font-mono">{build.gitSha ? build.gitSha.slice(0, 10) : "なし"}</span>
+          {build.dirty && <span className="text-zinc-500 dark:text-zinc-400">(+未コミットの変更)</span>}
+        </Fact>
+        <Fact label="登録">{formatTime(build.registeredAt)}</Fact>
+        <Fact label="ビルドID">
+          <span className="font-mono" title={build.buildIdFull}>
             {build.buildId}
-          </dd>
-        </div>
+          </span>
+        </Fact>
       </dl>
 
-      <h4 className="section-title">証拠</h4>
+      <SectionTitle>証拠</SectionTitle>
       {evidence.length === 0 ? (
-        <p className="muted small">このビルドで受理された証拠はまだありません</p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">このビルドで受理された証拠はまだありません</p>
       ) : (
-        <div className="evidence-grid">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
           {evidence.map((item) => (
             <EvidenceThumb key={item.evidenceId} item={item} repoKey={detail.repoKey} onOpen={onOpenEvidence} />
           ))}
@@ -127,12 +127,12 @@ function BuildDetail({
 
       {ownEvents.length > 0 && (
         <>
-          <h4 className="section-title">このビルドのできごと</h4>
-          <ol className="mini-feed">
+          <SectionTitle>このビルドのできごと</SectionTitle>
+          <ol>
             {ownEvents.map((event, i) => (
-              <li key={`${event.ts}-${i}`} className="mini-feed-row">
+              <li key={`${event.ts}-${i}`} className="flex items-baseline gap-2 py-1 text-[13px] text-zinc-600 dark:text-zinc-300">
                 {event.result === "ok" ? <AcceptBadge /> : <RejectBadge />}
-                <span className="event-body">
+                <span className="min-w-0 [overflow-wrap:anywhere]">
                   {eventSentence(event)}
                   {event.reason && ` — ${event.reason}`}
                 </span>
@@ -142,7 +142,24 @@ function BuildDetail({
           </ol>
         </>
       )}
-    </article>
+    </Card>
+  );
+}
+
+function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[11px] tracking-widest text-zinc-500 uppercase dark:text-zinc-400">{label}</dt>
+      <dd className="m-0 [overflow-wrap:anywhere]">{children}</dd>
+    </div>
+  );
+}
+
+export function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h4 className="mt-5 mb-2 text-xs font-semibold tracking-widest text-zinc-500 uppercase dark:text-zinc-400">
+      {children}
+    </h4>
   );
 }
 
@@ -157,15 +174,23 @@ export function EvidenceThumb({
 }) {
   const fileUrl = `/api/evidence/${repoKey}/${item.evidenceId}/file`;
   return (
-    <button className="evidence-thumb" onClick={() => onOpen(item.evidenceId)}>
+    <button
+      className="flex cursor-zoom-in flex-col overflow-hidden rounded-xl border border-black/10 text-left transition-colors hover:border-blue-500 dark:border-white/10"
+      onClick={() => onOpen(item.evidenceId)}
+    >
       {item.kind === "screenshot" ? (
-        <img src={fileUrl} alt={item.note ?? "スクリーンショット証拠"} loading="lazy" />
+        <img
+          className="aspect-[9/12] w-full object-cover object-top"
+          src={fileUrl}
+          alt={item.note ?? "スクリーンショット証拠"}
+          loading="lazy"
+        />
       ) : (
-        <span className="evidence-file-icon" aria-hidden>
+        <span className="grid aspect-[9/12] place-items-center text-3xl" aria-hidden>
           {item.kind === "video" ? "🎞" : "🧩"}
         </span>
       )}
-      <span className="evidence-thumb-note">{item.note ?? "(note なし)"}</span>
+      <span className="clamp-2 px-2.5 py-2 text-xs text-zinc-600 dark:text-zinc-300">{item.note ?? "(note なし)"}</span>
     </button>
   );
 }

@@ -1,3 +1,4 @@
+import { Chip } from "@heroui/react";
 import { CSSProperties } from "react";
 import { buildHue, humanTime } from "./lib";
 
@@ -11,27 +12,43 @@ export function BuildDot({ buildId, size = 10 }: { buildId: string; size?: numbe
   return <span className="build-dot" style={style} aria-hidden />;
 }
 
-export function Time({ iso }: { iso: string }) {
+export function Time({ iso, className = "" }: { iso: string; className?: string }) {
   const { text, title } = humanTime(iso);
   return (
-    <time className="muted small nowrap" title={title} dateTime={iso}>
+    <time className={`text-xs whitespace-nowrap text-muted ${className}`} title={title} dateTime={iso}>
       {text}
     </time>
   );
 }
 
 export function AcceptBadge() {
-  return <span className="badge badge-good">✓ 受理</span>;
+  return (
+    <Chip color="success" size="sm">
+      ✓ 受理
+    </Chip>
+  );
 }
 
 export function RejectBadge() {
-  return <span className="badge badge-critical">✕ 拒否</span>;
+  return (
+    <Chip color="danger" size="sm">
+      ✕ 拒否
+    </Chip>
+  );
 }
 
 export function DirtyChip() {
   return (
-    <span className="chip chip-warning" title="未コミットの変更を含む状態からビルドされた">
+    <Chip color="warning" size="sm" title="未コミットの変更を含む状態からビルドされた">
       ⚠ dirty
-    </span>
+    </Chip>
+  );
+}
+
+export function NeutralChip({ children }: { children: React.ReactNode }) {
+  return (
+    <Chip color="default" size="sm">
+      {children}
+    </Chip>
   );
 }

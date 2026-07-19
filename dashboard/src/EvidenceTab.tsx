@@ -1,5 +1,6 @@
+import { Card } from "@heroui/react";
 import { KIND_LABEL, RepoDetail, buildTitle } from "./lib";
-import { AcceptBadge, BuildDot, Time } from "./components";
+import { AcceptBadge, BuildDot, NeutralChip, Time } from "./components";
 
 // 証拠タブ: ビルド横断のギャラリー。証拠の顔はスクショ実物と note(何が写っているか)
 
@@ -13,42 +14,48 @@ export function EvidenceTab({
   onOpenBuild: (buildId: string) => void;
 }) {
   if (detail.evidence.length === 0) {
-    return <p className="muted pad">受理された証拠はまだありません</p>;
+    return <p className="p-6 text-zinc-500 dark:text-zinc-400">受理された証拠はまだありません</p>;
   }
 
   return (
-    <div className="gallery">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3.5">
       {detail.evidence.map((item) => {
         const build = detail.builds.find((b) => b.buildId === item.buildId) ?? null;
         const fileUrl = `/api/evidence/${detail.repoKey}/${item.evidenceId}/file`;
         return (
-          <figure key={item.evidenceId} className="gallery-card">
-            <button className="gallery-media" onClick={() => onOpenEvidence(item.evidenceId)}>
+          <Card key={item.evidenceId} className="overflow-hidden p-0">
+            <button className="block w-full cursor-zoom-in p-0" onClick={() => onOpenEvidence(item.evidenceId)}>
               {item.kind === "screenshot" ? (
-                <img src={fileUrl} alt={item.note ?? "スクリーンショット証拠"} loading="lazy" />
+                <img
+                  className="max-h-64 w-full border-b border-black/8 object-cover object-top dark:border-white/8"
+                  src={fileUrl}
+                  alt={item.note ?? "スクリーンショット証拠"}
+                  loading="lazy"
+                />
               ) : (
-                <span className="evidence-file-icon" aria-hidden>
+                <span className="grid aspect-[9/12] place-items-center text-3xl" aria-hidden>
                   {item.kind === "video" ? "🎞" : "🧩"}
                 </span>
               )}
             </button>
-            <figcaption>
-              <div className="gallery-head">
+            <div className="px-3.5 py-3">
+              <div className="flex flex-wrap items-center gap-2">
                 <AcceptBadge />
-                <span className="chip">{KIND_LABEL[item.kind]}</span>
-                <span className="right">
-                  <Time iso={item.attachedAt} />
-                </span>
+                <NeutralChip>{KIND_LABEL[item.kind]}</NeutralChip>
+                <Time iso={item.attachedAt} className="ml-auto" />
               </div>
-              {item.note && <p className="evidence-note">{item.note}</p>}
+              {item.note && <p className="mt-2 mb-1.5 text-[13px]">{item.note}</p>}
               {build !== null && (
-                <button className="build-link" onClick={() => onOpenBuild(item.buildId)}>
+                <button
+                  className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-zinc-600 transition-colors hover:text-blue-600 dark:text-zinc-300 dark:hover:text-blue-400"
+                  onClick={() => onOpenBuild(item.buildId)}
+                >
                   <BuildDot buildId={item.buildId} size={8} />
                   {buildTitle(build)}
                 </button>
               )}
-            </figcaption>
-          </figure>
+            </div>
+          </Card>
         );
       })}
     </div>

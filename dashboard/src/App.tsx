@@ -1,3 +1,4 @@
+import { Chip, Tabs } from "@heroui/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RepoDetail, RepoSummary, fetchJson } from "./lib";
 import { Time } from "./components";
@@ -86,96 +87,124 @@ export function App() {
   };
 
   const lightboxEvidence = detail?.evidence.find((e) => e.evidenceId === lightboxEvidenceId) ?? null;
+  const hasReject = detail?.events.some((e) => e.result === "rejected") ?? false;
 
   return (
-    <div className="app">
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden>
+    <div className="grid min-h-screen grid-cols-1 md:grid-cols-[272px_1fr]">
+      <aside className="flex flex-col border-r border-black/10 bg-white/60 md:sticky md:top-0 md:h-screen md:overflow-y-auto dark:border-white/10 dark:bg-white/3">
+        <div className="flex items-center gap-3 px-4 pt-5 pb-4">
+          <span
+            className="grid size-10 place-items-center rounded-xl border border-black/10 text-xl dark:border-white/10"
+            aria-hidden
+          >
             ⛩
           </span>
           <div>
-            <h1>Claude Gate</h1>
-            <p className="brand-sub">証拠つき完了報告</p>
+            <h1 className="text-base font-semibold tracking-tight">Claude Gate</h1>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">証拠つき完了報告</p>
           </div>
         </div>
 
-        <h2 className="rail-title">リポジトリ</h2>
-        {repos === null && <p className="muted pad-h">読み込み中…</p>}
+        <h2 className="px-4 pt-2 pb-1 text-[11px] font-semibold tracking-widest text-zinc-500 uppercase dark:text-zinc-400">
+          リポジトリ
+        </h2>
+        {repos === null && <p className="px-4 text-sm text-zinc-500 dark:text-zinc-400">読み込み中…</p>}
         {repos !== null && repos.length === 0 && (
-          <div className="empty pad-h">
+          <div className="px-4 text-sm">
             <p>まだ記録がありません。</p>
-            <p className="muted small">エージェントがビルドを登録すると、ここに現れます。</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              エージェントがビルドを登録すると、ここに現れます。
+            </p>
           </div>
         )}
         {(repos ?? []).map((repo) => (
           <button
             key={repo.repoKey}
-            className={repo.repoKey === selectedRepoKey ? "repo-card selected" : "repo-card"}
+            className={`w-full cursor-pointer px-4 py-2.5 text-left transition-colors hover:bg-black/4 dark:hover:bg-white/5 ${
+              repo.repoKey === selectedRepoKey
+                ? "bg-black/5 shadow-[inset_3px_0_0] shadow-blue-500 dark:bg-white/8"
+                : ""
+            }`}
             onClick={() => selectRepo(repo.repoKey)}
           >
-            <div className="repo-card-head">
-              <span className="repo-name">{repo.name}</span>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="font-semibold">{repo.name}</span>
               <Time iso={repo.lastSeenAt} />
             </div>
-            <div className="repo-card-counts">
+            <div className="flex gap-2.5 text-xs text-zinc-600 dark:text-zinc-300">
               <span>ビルド {repo.builds}</span>
               <span>証拠 {repo.evidence}</span>
-              {repo.rejected > 0 && <span className="text-critical">拒否 {repo.rejected}</span>}
+              {repo.rejected > 0 && <span className="font-semibold text-red-600 dark:text-red-400">拒否 {repo.rejected}</span>}
             </div>
           </button>
         ))}
 
-        <div className="sidebar-foot">
-          <span className={daemonOk ? "pill pill-good" : "pill pill-critical"}>
-            <span className="pill-dot" aria-hidden />
-            {daemonOk ? "デーモン稼働中" : "デーモン応答なし"}
-          </span>
+        <div className="mt-auto px-4 pt-4 pb-4">
+          <Chip color={daemonOk ? "success" : "danger"} size="sm">
+            {daemonOk ? "● デーモン稼働中" : "● デーモン応答なし"}
+          </Chip>
         </div>
       </aside>
 
-      <main className="main">
+      <main className="min-w-0 max-w-[1080px] px-5 pt-6 pb-16 md:px-7">
         {detail === null ? (
-          <p className="muted pad">{repos?.length === 0 ? "" : "リポジトリを選択してください"}</p>
+          <p className="p-6 text-zinc-500 dark:text-zinc-400">
+            {repos?.length === 0 ? "" : "リポジトリを選択してください"}
+          </p>
         ) : (
           <>
-            <header className="repo-head">
-              <div>
-                <h2>{detail.name}</h2>
-                <p className="muted small mono">{detail.commonDir.replace(/\/\.git$/, "")}</p>
-              </div>
+            <header>
+              <h2 className="text-xl font-semibold tracking-tight">{detail.name}</h2>
+              <p className="mt-0.5 font-mono text-xs text-zinc-500 dark:text-zinc-400">
+                {detail.commonDir.replace(/\/\.git$/, "")}
+              </p>
             </header>
 
-            <nav className="tabs" aria-label="オブジェクトの種類">
-              <TabButton current={tab} value="builds" onSelect={setTab} count={detail.builds.length}>
-                ビルド
-              </TabButton>
-              <TabButton current={tab} value="evidence" onSelect={setTab} count={detail.evidence.length}>
-                証拠
-              </TabButton>
-              <TabButton
-                current={tab}
-                value="activity"
-                onSelect={setTab}
-                count={detail.events.length}
-                alert={detail.events.some((e) => e.result === "rejected")}
-              >
-                できごと
-              </TabButton>
-            </nav>
-
-            {tab === "builds" && (
-              <BuildsTab
-                detail={detail}
-                selectedBuildId={effectiveBuildId}
-                onSelectBuild={setSelectedBuildId}
-                onOpenEvidence={setLightboxEvidenceId}
-              />
-            )}
-            {tab === "evidence" && (
-              <EvidenceTab detail={detail} onOpenEvidence={setLightboxEvidenceId} onOpenBuild={openBuild} />
-            )}
-            {tab === "activity" && <ActivityTab detail={detail} onOpenBuild={openBuild} />}
+            <Tabs
+              className="mt-4"
+              selectedKey={tab}
+              onSelectionChange={(key) => setTab(key as Tab)}
+            >
+              <Tabs.ListContainer className="w-fit">
+                <Tabs.List aria-label="オブジェクトの種類">
+                  <Tabs.Tab id="builds" className="whitespace-nowrap">
+                    ビルド
+                    <Chip color="default" size="sm">
+                      {detail.builds.length}
+                    </Chip>
+                    <Tabs.Indicator />
+                  </Tabs.Tab>
+                  <Tabs.Tab id="evidence" className="whitespace-nowrap">
+                    証拠
+                    <Chip color="default" size="sm">
+                      {detail.evidence.length}
+                    </Chip>
+                    <Tabs.Indicator />
+                  </Tabs.Tab>
+                  <Tabs.Tab id="activity" className="whitespace-nowrap">
+                    できごと
+                    <Chip color={hasReject ? "danger" : "default"} size="sm">
+                      {detail.events.length}
+                    </Chip>
+                    <Tabs.Indicator />
+                  </Tabs.Tab>
+                </Tabs.List>
+              </Tabs.ListContainer>
+              <Tabs.Panel id="builds" className="pt-4">
+                <BuildsTab
+                  detail={detail}
+                  selectedBuildId={effectiveBuildId}
+                  onSelectBuild={setSelectedBuildId}
+                  onOpenEvidence={setLightboxEvidenceId}
+                />
+              </Tabs.Panel>
+              <Tabs.Panel id="evidence" className="pt-4">
+                <EvidenceTab detail={detail} onOpenEvidence={setLightboxEvidenceId} onOpenBuild={openBuild} />
+              </Tabs.Panel>
+              <Tabs.Panel id="activity" className="pt-4">
+                <ActivityTab detail={detail} onOpenBuild={openBuild} />
+              </Tabs.Panel>
+            </Tabs>
           </>
         )}
       </main>
@@ -190,32 +219,5 @@ export function App() {
         />
       )}
     </div>
-  );
-}
-
-function TabButton({
-  current,
-  value,
-  onSelect,
-  count,
-  alert,
-  children,
-}: {
-  current: Tab;
-  value: Tab;
-  onSelect: (tab: Tab) => void;
-  count: number;
-  alert?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      className={current === value ? "tab selected" : "tab"}
-      onClick={() => onSelect(value)}
-      aria-current={current === value}
-    >
-      {children}
-      <span className={alert ? "tab-count tab-count-alert" : "tab-count"}>{count}</span>
-    </button>
   );
 }

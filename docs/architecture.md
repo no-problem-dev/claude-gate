@@ -1,40 +1,57 @@
 # アーキテクチャ
 
-このリポジトリは実装。概念設計(ドメインモデル・対訳表・あってはいけない状態の一覧)の SSOT は life リポジトリの `os/write/ios-*.md` 群にあり、ここでは実装の構造だけを説明する。
+このリポジトリは実装。概念設計(ドメインモデル・対訳表・あってはいけない状態の一覧)の SSOT は life リポジトリの `os/write/`(現在の姿のマスター = `ios-gate.md`、言語 = `ios-domain-model.md`)にあり、ここでは実装の構造だけを説明する。
 
 ## 全体
 
 ```
 Claude Code セッション(対話 / 並列ワーカー / cron)… N 個
  ├── XcodeBuildMCP ──── ビルド・テスト・シミュレータ操作(ゲートは関与しない)
- └── claude-gate デーモン(HTTP MCP・127.0.0.1:7350・マシンに1プロセス)
-       ├─ tools: ping / register_build / attach_evidence
-       ├─ kernel: store(状態)+ audit(監査)— 単一プロセスなので書き込みは直列
-       └─ subprocess: git / xcrun simctl
+ ├── claude-gate プラグイン ── MCP 接続 + gate-loop スキル + PreToolUse hook(git push 遮断)
+ └── claude-gate デーモン(HTTP MCP・127.0.0.1:7350・マシンに1プロセス・launchd 常駐)
+       ├─ tools: ping / open_report / register_build / attach_evidence / run_check / judge / submit
+       ├─ kernel: store(状態)+ audit(監査)+ api(ダッシュボード読み取りモデル)
+       ├─ subprocess: git / xcrun simctl / gate.yaml の checks コマンド
+       └─ /(ダッシュボード配信・読み取り専用)
 ```
 
 設計原則(実装に効いているものだけ):
 
-- **実行は自由、採用は厳格**: ビルドや操作は縛らない。「観測を証拠として受理する」瞬間だけ、ゲートが実物を確かめる
-- **申告を信用しない**: ビルドID はゲートが .app の中身から計算する。証拠の受理時はシミュレータ内の実物から計算し直して照合する
+- **実行は自由、採用は厳格**: ビルドや操作は縛らない。「観測を証拠として受理する」「判定する」「提出する」の瞬間だけ、ゲートが実物を確かめる
+- **申告を信用しない**: ビルドID はゲートが .app の中身から計算する。証拠の受理時はシミュレータ内の実物から計算し直して照合する。テスト系の確かめはエージェントの自己申告ではなく、ゲート自身が gate.yaml 宣言のコマンドを実行する(run_check)
+- **判定は決定論**: judge は pure function(報告 + 証拠 + builds + gate.yaml + 見えないこと台帳 → 判定)。LLM なし。ゴールデンテストで固定
 - **全操作べき等**: ID は乱数ではなく中身・対象から決める。同じ呼び出しを2回しても状態は1つ。再実行・リトライ・スケジュール実行が安全
 - **セッション状態を持たない**: 全ツールが対象(worksitePath 等)を明示引数で受ける。並列で何セッション繋がっても混線しない
 - **silent fallback 禁止**: 失敗は必ず rejected(reason + fix)として表面化する
+- **掃除はエージェントの語彙に入れない**: 記録の削除は人間の CLI(`claude-gate forget`)のみ。参照されている記録は消せず、レコード単位の削除は監査ログに残る
 
 ## コード構成
 
 ```
 src/
-  cli.ts             # claude-gate CLI(serve / install / doctor)。launchd plist を動的生成
+  cli.ts             # claude-gate CLI(serve / install / doctor / forget)。launchd plist を動的生成
   kernel/            # ドメイン非依存の薄い機構
-    server.ts        # HTTP MCP(stateless streamable)。ツール登録
+    server.ts        # HTTP MCP(stateless streamable)+ ダッシュボード API/配信。ツール登録
     store.ts         # 状態の置き場の解決と JSON 読み書き
     audit.ts         # events.jsonl への追記
+    api.ts           # ダッシュボードの読み取りモデル(overview / repoDetail / 証拠ファイル)
+    forget.ts        # 掃除の本体(参照チェック・べき等・監査記録)
   ios/               # iOS ドメイン
     words.ts         # 語彙の型定義(life リポジトリの対訳表と 1:1。表にない語は使わない)
     build_id.ts      # .app ディレクトリ → ビルドID(決定論・純関数)
     simulator.ts     # simctl get_app_container
-    tools/           # MCP ツールの本体(register_build / attach_evidence)
+    git.ts           # rev-parse / status(sha・dirty・repoKey の解決)
+    gate_yaml.ts     # リポジトリ内 gate.yaml の読み取りと検証(壊れた宣言は rejected)
+    defaults.ts      # 同梱デフォルト(passline・見えないこと台帳)
+    judge_core.ts    # 判定のコア(全入力を引数で受ける pure function)
+    report_link.ts   # 証拠と報告の紐づけ + FSM の移動(判定後の証拠追加で判定を無効化)
+    tools/           # MCP ツールの本体(open_report / register_build / attach_evidence /
+                     #   run_check / judge / submit)
+dashboard/           # React ダッシュボード(HeroUI v3 + Tailwind v4。設計 = docs/dashboard-design.md)
+hooks/               # PreToolUse hook(guard-push.sh: gate.yaml のあるリポでエージェントの git push を遮断)
+skills/gate-loop/    # 使い方スキル(いつ・どの順でツールを呼ぶか)
+.claude-plugin/      # Claude Code プラグイン定義(バージョンはデーモンと独立)
+.mcp.json            # プラグインの MCP 接続定義(→ http://127.0.0.1:7350/mcp)
 ```
 
 ## データ
@@ -44,51 +61,43 @@ src/
   repos.json               # 既知リポジトリの台帳
   repos/<repoKey>/         # repoKey = git 共有ディレクトリの実パスの sha256 先頭12文字
     builds/<buildId>.json
-    evidence/<evidenceId>.json + 観測ファイルの不変コピー
-    events.jsonl           # 監査(成功も拒否も全部)
-  logs/
+    evidence/<evidenceId>.json + 観測ファイル・実行ログの不変コピー
+    reports/<reportId>.json  # 完了報告(状態・動作一覧・紐づけ・判定結果・提出の記録)
+    events.jsonl           # 監査(成功も拒否も掃除も全部)
+  logs/                    # デーモンのログ
 ```
 
 - repoKey は全 worktree から同じ値に解決される(worktree を消しても状態が残る)
 - 証拠ファイルは受理時にコピーして不変化する(元ファイルが上書きされても証拠は変わらない)
+- 宣言(env / worksite / checks / passline / cannot_see)は状態と分離し、リポジトリ内の `gate.yaml`(git 管理)に置く
 
-## ツール仕様(スライス1)
+## ツール表面
 
-### register_build
-
-| 引数 | 意味 |
-|---|---|
-| worksitePath | 作業場(worktree)のパス。状態の置き場をここから解決 |
-| appPath | ビルド成果物 .app(XcodeBuildMCP の `data.artifacts.appPath`) |
-| scheme / configuration | 記録用メタ(任意) |
-
-.app の全ファイルを相対パスでソートし、パス + 中身のハッシュから buildId を計算(git の commit ID と同じ仕組み)。同じビルドの再登録は同じレコードを返す。
-
-### attach_evidence
-
-| 引数 | 意味 |
-|---|---|
-| worksitePath / buildId | どの作業場・どのビルドについての証拠か |
-| kind | screenshot / ui_snapshot / video |
-| file | 観測ファイルのパス |
-| simulatorUdid / bundleId | どのシミュレータの・どのアプリを観測したか |
-| note | 何を観測したか(任意) |
-
-受理前に `simctl get_app_container` でシミュレータ内の実物を取得し、ビルドID を計算し直して登録済みの ID と照合する。不一致は rejected(両方の ID と直し方を返す)。evidenceId = sha256(buildIdFull + kind + ファイル内容) の先頭12文字なので、同じ証拠の再添付は何も増やさない。
-
-### 応答の型(全ツール共通)
+全ツールの引数・拒否条件は `src/kernel/server.ts` の登録定義と各 tools/ 実装が正。応答の封筒は共通:
 
 ```ts
-{ status: "ok"; state: …; nextSteps: string[] }
+{ status: "ok"; state: …; note?: string; nextSteps: string[] }
 | { status: "rejected"; reason: string; fix: string; nextSteps: string[] }
 ```
 
-rejected は「何がダメか(reason)」と「どうすれば通るか(fix)」を必ず持つ。エージェントは fix に従って直し、nextSteps で次の操作を知る。
+rejected は「何がダメか(reason)」と「どうすれば通るか(fix)」を必ず持つ。fix は「従えば必ず通る」ことをドッグフードで確かめる(ios-dogfood-notes.md #22)。
+
+完了報告の FSM(全状態が実運用済み):
+
+```
+下書き → 証拠あり → 合格 / 不合格 / 確認できず → 提出済み(終着)
+```
 
 ## テスト
 
-`npm test`(vitest・11本)。中心は **A1 再現テスト**: 「シミュレータに古いビルドが残った状態で撮ったスクショは拒否される」— 実際に起きた事故の再現が最重要の受け入れ基準。
+`npm test`(vitest・69本)+ `npm run typecheck`(server + dashboard)。CI は GitHub Actions(push/PR で typecheck + vitest)。
 
-## 今後(スライス2〜4)
+- 中心は **A1 再現テスト**(attach_evidence: 古いビルドのスクショは拒否される)と **judge のゴールデンテスト**(入力組合せ → 期待判定。覆いは動作ごとに最新の適合証拠1件 = #21 の回帰を含む)
+- submit はローカル bare リモートへの実 push で検証(全拒否経路 + べき等)
 
-完了報告(open_report)と判定(judge)・合格ライン YAML・変更の種類ごとの最低限の確かめ方(minimum_check)・専用シミュレータの割り当て・担当(claim)・提出(submit)の一本化・React ダッシュボード。設計は life リポジトリの `os/write/ios-gate-spec.md` / `ios-parallel.md`。
+## 反映の2経路(#23)
+
+| 変更対象 | 反映手順 |
+|---|---|
+| デーモン / ダッシュボード | `npm run build && claude-gate install` |
+| プラグイン(skills / hooks / .mcp.json) | plugin.json version bump → push → `claude plugin update claude-gate@taniguchi-kyoichi` → `/reload-plugins`(ツール一覧は `/mcp reconnect`) |

@@ -1,5 +1,6 @@
 import { Card, Chip } from "@heroui/react";
 import { SectionTitle } from "./BuildsTab";
+import { LoopDiagram, ReportStateDiagram, VerifyDiagram } from "./Diagrams";
 
 // ガイド: この仕組み(形式言語)の人間向け説明書。
 // 内容は言語定義(life リポ os/write/ios-domain-model.md ほか)のレンダリング。
@@ -48,11 +49,28 @@ export function GuideView() {
             それっぽい一般論からは作らない。
           </p>
         </Card>
+
+        <div className="mt-3 grid items-stretch gap-2 sm:grid-cols-[1fr_auto_1fr_auto_1fr]">
+          <RoleLane name="エージェント" verb="自由に作る">
+            実装・ビルド・観測。試行錯誤は縛らない
+          </RoleLane>
+          <LaneArrow label="登録・添付" />
+          <RoleLane name="ゲート" verb="厳格に受け取る" accent>
+            出所を照合して受理 / 拒否。記録は不変
+          </RoleLane>
+          <LaneArrow label="記録" />
+          <RoleLane name="人間" verb="観て決める">
+            ダッシュボードで確認。「確認できず」を引き取る
+          </RoleLane>
+        </div>
       </section>
 
       {/* ③ どう動く */}
       <section className="pb-8">
         <SectionTitle>どう動くか — 証拠つき完了報告のループ</SectionTitle>
+        <Card className="mb-3 p-4">
+          <LoopDiagram />
+        </Card>
         <ol className="grid gap-2">
           <Step n={1} name="コミット">
             証拠にするビルドは、コミットしてから作る。しないと「未コミット変更あり」が記録に残り、
@@ -78,6 +96,16 @@ export function GuideView() {
           <Chip size="sm" color="default">すべての操作はべき等(何度呼んでも安全)</Chip>
           <Chip size="sm" color="default">記録は不変(拒否も含めて全部残る)</Chip>
         </div>
+
+        <h3 className="mt-6 mb-2 text-[13px] font-semibold">出所照合のしくみ — なぜ偽れないか</h3>
+        <Card className="p-4">
+          <VerifyDiagram />
+          <p className="mt-2 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300">
+            ビルドID は成果物の<strong>中身</strong>から計算する(git の commit ID と同じ仕組み)。
+            受理のときはシミュレータに入っている実物からもう一度計算するので、
+            「登録したものと違うビルドのスクショ」は数字が合わず、機械的に弾かれる。
+          </p>
+        </Card>
       </section>
 
       {/* ④ ことば */}
@@ -132,10 +160,50 @@ export function GuideView() {
             完了報告(open_report)・判定(judge)・プロジェクトごとの合格ライン(gate.yaml)
           </StatusRow>
         </div>
+        <h3 className="mt-6 mb-2 text-[13px] font-semibold">これからの全体像 — 完了報告の一生(スライス2で実装)</h3>
+        <Card className="p-4">
+          <ReportStateDiagram />
+          <p className="mt-2 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300">
+            状態はこの1本だけ。証拠を集めている間の試行錯誤は自由で、
+            <strong>状態から状態への移動だけ</strong>をゲートが決定論で判定する。
+            「確認できず」は失敗ではなく、人間に渡すための正式な出口。
+          </p>
+        </Card>
+
         <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
           言語定義の SSOT は life リポジトリの os/write/(ios-domain-model.md ほか)。この画面はその人間向けの説明で、言語の変更と一緒に更新される。
         </p>
       </section>
+    </div>
+  );
+}
+
+function RoleLane({
+  name,
+  verb,
+  accent,
+  children,
+}: {
+  name: string;
+  verb: string;
+  accent?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className={`p-3.5 ${accent ? "border border-blue-500/40" : ""}`}>
+      <h3 className="text-[14px] font-semibold">{name}</h3>
+      <p className="text-[11px] font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-400">{verb}</p>
+      <p className="mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">{children}</p>
+    </Card>
+  );
+}
+
+function LaneArrow({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-center gap-1 text-zinc-400 sm:flex-col dark:text-zinc-500">
+      <span className="text-[10px]">{label}</span>
+      <span aria-hidden className="hidden sm:block">→</span>
+      <span aria-hidden className="sm:hidden">↓</span>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { Card, Chip } from "@heroui/react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   CHANGE_KIND_LABEL,
   CHECK_LABEL,
@@ -12,7 +12,8 @@ import {
   formatTime,
 } from "./lib";
 import { EvidenceThumb, SectionTitle } from "./BuildsTab";
-import { BuildDot, Time } from "./components";
+import { AcceptBadge, BuildDot, RejectBadge, Time } from "./components";
+import { eventSentence } from "./lib";
 
 // 完了報告タブ: この仕組みの主役オブジェクト。
 // カバレッジ表 = 動作ごとに「変更の種類 / 確かめ方 / 証拠 / 判定」(K-1 の人間向け表示)。
@@ -20,10 +21,12 @@ import { BuildDot, Time } from "./components";
 
 export function ReportsTab({
   detail,
+  focusReportId,
   onOpenEvidence,
   onOpenBuild,
 }: {
   detail: RepoDetail;
+  focusReportId: string | null;
   onOpenEvidence: (evidenceId: string) => void;
   onOpenBuild: (buildId: string) => void;
 }) {
@@ -45,6 +48,7 @@ export function ReportsTab({
           key={report.reportId}
           report={report}
           detail={detail}
+          focused={report.reportId === focusReportId}
           onOpenEvidence={onOpenEvidence}
           onOpenBuild={onOpenBuild}
         />
@@ -56,14 +60,21 @@ export function ReportsTab({
 function ReportCard({
   report,
   detail,
+  focused,
   onOpenEvidence,
   onOpenBuild,
 }: {
   report: Report;
   detail: RepoDetail;
+  focused: boolean;
   onOpenEvidence: (evidenceId: string) => void;
   onOpenBuild: (buildId: string) => void;
 }) {
+  // できごとから飛んできたときは該当カードへスクロールして強調(できごとはオブジェクトに従属する記録)
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (focused) cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focused]);
   const evidenceByBehavior = useMemo(() => {
     const map = new Map<number, Evidence[]>();
     for (const link of report.evidence) {
@@ -77,9 +88,11 @@ function ReportCard({
   }, [report.evidence, detail.evidence]);
 
   const covered = report.behaviors.filter((_, i) => (evidenceByBehavior.get(i + 1)?.length ?? 0) > 0).length;
+  const ownEvents = detail.events.filter((e) => e.reportId === report.reportId).slice(0, 6);
 
   return (
-    <Card className="p-5">
+    <div ref={cardRef} className="scroll-mt-4">
+    <Card className={`p-5 ${focused ? "ring-2 ring-blue-500/60" : ""}`}>
       <header className="flex flex-wrap items-center gap-2.5">
         <h3 className="text-base font-semibold">{report.title}</h3>
         <Chip color={REPORT_STATE_COLOR[report.state]} size="sm">
@@ -197,6 +210,28 @@ function ReportCard({
           })}
         </div>
       )}
+
+      {ownEvents.length > 0 && (
+        <>
+          <SectionTitle>この報告のできごと(直近{ownEvents.length}件 — 全量はできごとタブ)</SectionTitle>
+          <ol>
+            {ownEvents.map((event, i) => (
+              <li
+                key={`${event.ts}-${i}`}
+                className="flex items-baseline gap-2 py-1 text-[13px] text-zinc-600 dark:text-zinc-300"
+              >
+                {event.result === "ok" ? <AcceptBadge /> : <RejectBadge />}
+                <span className="min-w-0 [overflow-wrap:anywhere]">
+                  {eventSentence(event)}
+                  {event.reason && ` — ${event.reason}`}
+                </span>
+                <Time iso={event.ts} />
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
     </Card>
+    </div>
   );
 }

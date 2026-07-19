@@ -192,6 +192,16 @@ export function formatTimeFull(iso: string): string {
   });
 }
 
+// できごとの日付セクション見出し: 今日 / 昨日 / M月D日(曜)
+export function dayLabel(iso: string): string {
+  const date = new Date(iso);
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86400000);
+  if (days === 0) return "今日";
+  if (days === 1) return "昨日";
+  return date.toLocaleDateString("ja-JP", { month: "numeric", day: "numeric", weekday: "short" });
+}
+
 // 24時間以内は相対、それより古いものは絶対。title には常に完全な時刻を持たせる
 export function humanTime(iso: string): { text: string; title: string } {
   const seconds = (Date.now() - new Date(iso).getTime()) / 1000;

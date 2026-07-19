@@ -20,6 +20,7 @@ export function App() {
   const [detail, setDetail] = useState<RepoDetail | null>(null);
   const [tab, setTab] = useState<Tab>("builds");
   const [selectedBuildId, setSelectedBuildId] = useState<string | null>(null);
+  const [focusReportId, setFocusReportId] = useState<string | null>(null);
   const [lightboxEvidenceId, setLightboxEvidenceId] = useState<string | null>(null);
   const [daemonOk, setDaemonOk] = useState(true);
   const [view, setView] = useState<View>("state");
@@ -88,6 +89,7 @@ export function App() {
     if (repoKey === selectedRepoKey) return;
     setSelectedRepoKey(repoKey);
     setSelectedBuildId(null);
+    setFocusReportId(null);
     setLightboxEvidenceId(null);
     const summary = repos?.find((r) => r.repoKey === repoKey);
     setTab(summary !== undefined && summary.reports > 0 ? "reports" : "builds");
@@ -97,6 +99,13 @@ export function App() {
   const openBuild = (buildId: string) => {
     setTab("builds");
     setSelectedBuildId(buildId);
+    setLightboxEvidenceId(null);
+  };
+
+  // 相互リンク: できごとから報告へ(完了報告タブで該当カードを強調してスクロール)
+  const openReport = (reportId: string) => {
+    setTab("reports");
+    setFocusReportId(reportId);
     setLightboxEvidenceId(null);
   };
 
@@ -155,6 +164,7 @@ export function App() {
               <Time iso={repo.lastSeenAt} />
             </div>
             <div className="flex gap-2.5 text-xs text-zinc-600 dark:text-zinc-300">
+              <span>報告 {repo.reports}</span>
               <span>ビルド {repo.builds}</span>
               <span>証拠 {repo.evidence}</span>
               {repo.rejected > 0 && <span className="font-semibold text-red-600 dark:text-red-400">拒否 {repo.rejected}</span>}
@@ -223,7 +233,12 @@ export function App() {
                 </Tabs.List>
               </Tabs.ListContainer>
               <Tabs.Panel id="reports" className="pt-4">
-                <ReportsTab detail={detail} onOpenEvidence={setLightboxEvidenceId} onOpenBuild={openBuild} />
+                <ReportsTab
+                  detail={detail}
+                  focusReportId={focusReportId}
+                  onOpenEvidence={setLightboxEvidenceId}
+                  onOpenBuild={openBuild}
+                />
               </Tabs.Panel>
               <Tabs.Panel id="builds" className="pt-4">
                 <BuildsTab
@@ -237,7 +252,7 @@ export function App() {
                 <EvidenceTab detail={detail} onOpenEvidence={setLightboxEvidenceId} onOpenBuild={openBuild} />
               </Tabs.Panel>
               <Tabs.Panel id="activity" className="pt-4">
-                <ActivityTab detail={detail} onOpenBuild={openBuild} />
+                <ActivityTab detail={detail} onOpenBuild={openBuild} onOpenReport={openReport} />
               </Tabs.Panel>
             </Tabs>
           </>

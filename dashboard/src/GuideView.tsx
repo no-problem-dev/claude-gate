@@ -72,6 +72,10 @@ export function GuideView() {
           <LoopDiagram />
         </Card>
         <ol className="grid gap-2">
+          <Step n={0} name="報告を開く" en="open_report">
+            作業名と<strong>動作一覧</strong>(動くと言っている動作 + 使う確かめ方)を宣言する。
+            動作一覧が空の報告は開けない — 証拠なしの「できました」を型で防ぐ。
+          </Step>
           <Step n={1} name="コミット">
             証拠にするビルドは、コミットしてから作る。しないと「未コミット変更あり」が記録に残り、
             どのコミットの成果物か確定できなくなる。
@@ -88,7 +92,9 @@ export function GuideView() {
           </Step>
           <Step n={5} name="照合して受理 / 拒否" en="attach_evidence">
             ゲートがシミュレータ内の<strong>実物</strong>からビルドID を計算し直し、
-            登録と一致したときだけ証拠として受理する。別のビルドなら拒否(理由と直し方つき)。
+            登録と一致したときだけ証拠として受理し、<strong>報告の動作に紐づける</strong>。
+            別のビルドなら拒否(理由と直し方つき)。どの動作がまだ覆われていないかは
+            完了報告タブのカバレッジ表に出る。
           </Step>
         </ol>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -128,6 +134,7 @@ export function GuideView() {
               </tr>
             </thead>
             <tbody>
+              <Word ja="完了報告" en="report">「できました」の型。作業名と動作一覧を持つ(空の一覧では開けない)</Word>
               <Word ja="ビルド" en="build">検証対象の成果物</Word>
               <Word ja="ビルドID" en="build_id">中身から計算する同一性。偽れない</Word>
               <Word ja="証拠" en="evidence">受理された観測の記録(スクショ・録画)</Word>
@@ -156,11 +163,17 @@ export function GuideView() {
           <StatusRow chip={<Chip size="sm" color="success">稼働中</Chip>} name="登録と照合(スライス1)">
             ビルドの登録・証拠の出所照合・監査記録。「古いビルドを見て誤判定」は構造的に再発できない
           </StatusRow>
-          <StatusRow chip={<Chip size="sm" color="default">次</Chip>} name="完了報告と判定(スライス2)">
-            完了報告(open_report)・判定(judge)・プロジェクトごとの合格ライン(gate.yaml)
+          <StatusRow chip={<Chip size="sm" color="success">稼働中</Chip>} name="完了報告の骨格(スライス2a)">
+            報告を開く(動作一覧が空だと開けない)・動作ごとの証拠の紐づけ・カバレッジ表。
+            「実行なき完了報告」に型で対抗
+          </StatusRow>
+          <StatusRow chip={<Chip size="sm" color="default">次</Chip>} name="判定(スライス2b)">
+            決定論の判定(judge)・リポジトリ内の宣言 gate.yaml・見えないこと台帳
           </StatusRow>
         </div>
-        <h3 className="mt-6 mb-2 text-[13px] font-semibold">これからの全体像 — 完了報告の一生(スライス2で実装)</h3>
+        <h3 className="mt-6 mb-2 text-[13px] font-semibold">
+          全体像 — 完了報告の一生(下書き → 証拠あり は稼働中。判定から先はスライス2b/3)
+        </h3>
         <Card className="p-4">
           <ReportStateDiagram />
           <p className="mt-2 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300">

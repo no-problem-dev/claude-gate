@@ -20,6 +20,7 @@ export function repoDirOf(worksitePath: string): string {
   const dir = join(gateHome(), "repos", repoKey);
   mkdirSync(join(dir, "builds"), { recursive: true });
   mkdirSync(join(dir, "evidence"), { recursive: true });
+  mkdirSync(join(dir, "reports"), { recursive: true });
   registerRepo(repoKey, commonAbs);
   return dir;
 }

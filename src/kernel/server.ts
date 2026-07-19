@@ -6,6 +6,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import express from "express";
 import { z } from "zod";
 import { attachEvidence } from "../ios/tools/attach_evidence.js";
+import { openReport } from "../ios/tools/open_report.js";
 import { registerBuild } from "../ios/tools/register_build.js";
 import { evidenceFilePath, overview, repoDetail } from "./api.js";
 
@@ -30,12 +31,33 @@ const asReply = (run: () => unknown) => {
 };
 
 function newServer(): McpServer {
-  const server = new McpServer({ name: "claude-gate", version: "0.6.0" });
+  const server = new McpServer({ name: "claude-gate", version: "0.7.0" });
 
   server.registerTool(
     "ping",
     { description: "ゲートの生存確認。プロセス ID を返す" },
     async () => asContent({ status: "ok", state: { pid: process.pid }, nextSteps: ["register_build"] }),
+  );
+
+  server.registerTool(
+    "open_report",
+    {
+      description:
+        "報告を開く。作業名と動作一覧(動くと言っている動作 + 使う確かめ方)を宣言する。動作一覧が空の報告は作れない。同じ作業名の再呼び出しはべき等(動作一覧はオープン時に固定)",
+      inputSchema: {
+        worksitePath: z.string().describe("作業場(worktree)のパス"),
+        title: z.string().describe("作業名(日本語の日常語。例「時間帯あいさつ+日付表示」)"),
+        behaviors: z
+          .array(
+            z.object({
+              behavior: z.string().describe("動くと言っている動作(文で書く)"),
+              check: z.string().describe("使う確かめ方(例: ユニットテスト / スクショ / 実機操作)"),
+            }),
+          )
+          .describe("動作一覧 + 確かめ計画。並び順が番号(1始まり)になる"),
+      },
+    },
+    async (args) => asReply(() => openReport(args)),
   );
 
   server.registerTool(
@@ -66,6 +88,8 @@ function newServer(): McpServer {
         simulatorUdid: z.string(),
         bundleId: z.string(),
         note: z.string().optional().describe("何を観測したか"),
+        reportId: z.string().optional().describe("紐づける報告(open_report が返した reportId。behaviorIndex とセット)"),
+        behaviorIndex: z.number().int().optional().describe("紐づける動作の番号(open_report が返す 1 始まり)"),
       },
     },
     async (args) => asReply(() => attachEvidence(args)),
@@ -78,7 +102,7 @@ const app = express();
 app.use(express.json({ limit: "20mb" }));
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, name: "claude-gate", version: "0.6.0", pid: process.pid });
+  res.json({ ok: true, name: "claude-gate", version: "0.7.0", pid: process.pid });
 });
 
 app.post("/mcp", async (req, res) => {

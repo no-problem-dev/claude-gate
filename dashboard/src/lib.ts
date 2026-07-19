@@ -7,8 +7,12 @@ export interface GateEvent {
   reason?: string;
   buildId?: string;
   evidenceId?: string;
+  reportId?: string;
+  behaviorIndex?: number;
+  state?: string;
   alreadyRegistered?: boolean;
   alreadyAttached?: boolean;
+  alreadyOpened?: boolean;
 }
 
 export interface RepoSummary {
@@ -16,6 +20,7 @@ export interface RepoSummary {
   name: string;
   commonDir: string;
   lastSeenAt: string;
+  reports: number;
   builds: number;
   evidence: number;
   rejected: number;
@@ -45,10 +50,33 @@ export interface Evidence {
   attachedAt: string;
 }
 
+export type ReportState = "draft" | "evidenced";
+
+export interface BehaviorEntry {
+  behavior: string;
+  check: string;
+}
+
+export interface Report {
+  reportId: string;
+  title: string;
+  behaviors: BehaviorEntry[];
+  state: ReportState;
+  evidence: { evidenceId: string; behaviorIndex: number }[];
+  buildIds: string[];
+  openedAt: string;
+}
+
+export const REPORT_STATE_LABEL: Record<ReportState, string> = {
+  draft: "下書き",
+  evidenced: "証拠あり",
+};
+
 export interface RepoDetail {
   repoKey: string;
   name: string;
   commonDir: string;
+  reports: Report[];
   builds: Build[];
   evidence: Evidence[];
   events: GateEvent[];
@@ -118,12 +146,18 @@ export function buildHue(buildId: string): number {
 
 // できごとを日本語の文にする(ツールの英語名は UI に出さない)
 export function eventSentence(event: GateEvent): string {
-  const again = event.alreadyRegistered || event.alreadyAttached ? "(既存の記録を返却)" : "";
+  const again = event.alreadyRegistered || event.alreadyAttached || event.alreadyOpened ? "(既存の記録を返却)" : "";
   if (event.tool === "register_build") {
     return event.result === "ok" ? `ビルドを登録${again}` : "ビルドの登録を拒否";
   }
   if (event.tool === "attach_evidence") {
     return event.result === "ok" ? `証拠を受理${again}` : "証拠を拒否";
+  }
+  if (event.tool === "open_report") {
+    return event.result === "ok" ? `報告を開いた${again}` : "報告を開くのを拒否";
+  }
+  if (event.tool === "report_state") {
+    return `報告が「${event.state === "evidenced" ? "証拠あり" : event.state}」になった`;
   }
   return event.tool;
 }

@@ -7,10 +7,11 @@ import { EvidenceTab } from "./EvidenceTab";
 import { ActivityTab } from "./ActivityTab";
 import { GuideView } from "./GuideView";
 import { Lightbox } from "./Lightbox";
+import { ReportsTab } from "./ReportsTab";
 
 const POLL_MS = 5000;
 
-export type Tab = "builds" | "evidence" | "activity";
+export type Tab = "reports" | "builds" | "evidence" | "activity";
 type View = "state" | "guide";
 
 export function App() {
@@ -28,11 +29,18 @@ export function App() {
       const data = await fetchJson<{ repos: RepoSummary[] }>("/api/overview");
       setRepos(data.repos);
       setDaemonOk(true);
-      setSelectedRepoKey((key) => key ?? data.repos[0]?.repoKey ?? null);
     } catch {
       setDaemonOk(false);
     }
   }, []);
+
+  // 初回だけ先頭リポジトリを選び、報告があれば完了報告タブを開く(主役オブジェクト)
+  useEffect(() => {
+    if (selectedRepoKey === null && repos !== null && repos.length > 0) {
+      setSelectedRepoKey(repos[0].repoKey);
+      setTab(repos[0].reports > 0 ? "reports" : "builds");
+    }
+  }, [repos, selectedRepoKey]);
 
   useEffect(() => {
     void refresh();
@@ -81,6 +89,8 @@ export function App() {
     setSelectedRepoKey(repoKey);
     setSelectedBuildId(null);
     setLightboxEvidenceId(null);
+    const summary = repos?.find((r) => r.repoKey === repoKey);
+    setTab(summary !== undefined && summary.reports > 0 ? "reports" : "builds");
   };
 
   // 相互リンク: 証拠・できごとから属すビルドへ
@@ -182,6 +192,13 @@ export function App() {
             >
               <Tabs.ListContainer className="w-fit">
                 <Tabs.List aria-label="オブジェクトの種類">
+                  <Tabs.Tab id="reports" className="whitespace-nowrap">
+                    完了報告
+                    <Chip color="default" size="sm">
+                      {detail.reports.length}
+                    </Chip>
+                    <Tabs.Indicator />
+                  </Tabs.Tab>
                   <Tabs.Tab id="builds" className="whitespace-nowrap">
                     ビルド
                     <Chip color="default" size="sm">
@@ -205,6 +222,9 @@ export function App() {
                   </Tabs.Tab>
                 </Tabs.List>
               </Tabs.ListContainer>
+              <Tabs.Panel id="reports" className="pt-4">
+                <ReportsTab detail={detail} onOpenEvidence={setLightboxEvidenceId} onOpenBuild={openBuild} />
+              </Tabs.Panel>
               <Tabs.Panel id="builds" className="pt-4">
                 <BuildsTab
                   detail={detail}

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { gateHome, readJson } from "./store.js";
-import type { Build, Evidence } from "../ios/words.js";
+import type { Build, Evidence, Report } from "../ios/words.js";
 
 // ダッシュボードの読み取りモデル。ゲートの状態(~/.claude-gate)を人間向けに集約する。
 // 書き込みは一切しない: 状態を変えられるのは MCP ツールだけ。
@@ -27,6 +27,7 @@ export interface RepoSummary {
   name: string;
   commonDir: string;
   lastSeenAt: string;
+  reports: number;
   builds: number;
   evidence: number;
   rejected: number;
@@ -37,6 +38,7 @@ export interface RepoDetail {
   repoKey: string;
   name: string;
   commonDir: string;
+  reports: Report[];
   builds: Build[];
   evidence: Evidence[];
   events: GateEvent[];
@@ -77,6 +79,7 @@ export function overview(): { repos: RepoSummary[] } {
       name: repoName(entry.commonDir),
       commonDir: entry.commonDir,
       lastSeenAt: entry.lastSeenAt,
+      reports: readRecords<Report>(join(repoDir, "reports")).length,
       builds: readRecords<Build>(join(repoDir, "builds")).length,
       evidence: readRecords<Evidence>(join(repoDir, "evidence")).length,
       rejected: events.filter((e) => e.result === "rejected").length,
@@ -91,14 +94,17 @@ export function repoDetail(repoKey: string): RepoDetail | null {
   const entry = readRegistry()[repoKey];
   if (!entry) return null;
   const repoDir = join(gateHome(), "repos", repoKey);
+  const reports = readRecords<Report>(join(repoDir, "reports"));
   const builds = readRecords<Build>(join(repoDir, "builds"));
   const evidence = readRecords<Evidence>(join(repoDir, "evidence"));
+  reports.sort((a, b) => (a.openedAt < b.openedAt ? 1 : -1));
   builds.sort((a, b) => (a.registeredAt < b.registeredAt ? 1 : -1));
   evidence.sort((a, b) => (a.attachedAt < b.attachedAt ? 1 : -1));
   return {
     repoKey,
     name: repoName(entry.commonDir),
     commonDir: entry.commonDir,
+    reports,
     builds,
     evidence,
     events: readEvents(repoDir, 200).reverse(),

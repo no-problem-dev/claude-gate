@@ -85,7 +85,10 @@ export function judgeReport(input: JudgeInput): JudgeResult {
       push("unconfirmed", `この確かめ方では確認できない: ${blind.reason} → ${blind.instead}`);
       continue;
     }
-    // 5. K-1: 紐づいた受理済み証拠のうち、確かめ方に適合するもので覆われているか
+    // 5. K-1: 紐づいた受理済み証拠のうち、確かめ方に適合するもので覆われているか。
+    // 覆いに使うのは動作ごとに「最新の適合証拠1件」だけ: 記録は積み上がる一方(不変)なので、
+    // 全部を覆いに数えると、取り直し前の古い証拠が同一ソース要件を永久に破る(実際に起きた)。
+    // 判定が答えるのは「最新の検証が何を見たか」
     const linked = report.evidence
       .filter((l) => l.behaviorIndex === index)
       .map((l) => evidenceById[l.evidenceId])
@@ -100,7 +103,8 @@ export function judgeReport(input: JudgeInput): JudgeResult {
       }
       continue;
     }
-    covering.push(...okCovers);
+    const latest = okCovers.reduce((a, b) => (a.attachedAt >= b.attachedAt ? a : b));
+    covering.push(latest);
     // 6. 動きの質は機械に見えない: 録画の存在と出所までを機械が確かめ、合否は人間
     if (entry.change_kind === "motion") {
       push("unconfirmed", "録画は受理済み。動きの質の合否は人間が判断する");

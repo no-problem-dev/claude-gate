@@ -194,6 +194,23 @@ describe("judgeReport — ゴールデン", () => {
     expect(result.reasons.join()).toContain("未コミット");
   });
 
+  it("取り直し前の古い緑が別ソースでも、覆いは動作ごとに最新の1件(実運用で発見した回帰)", () => {
+    // HEAD を動かして run_check を取り直すと、古い緑と新しい緑が別ソースになる。
+    // 全部を覆いに数えると同一ソース要件が永久に破られ、submit の fix が実行不能になる
+    const report = makeReport(
+      [{ behavior: "計算が正しい", change_kind: "logic", check: "unit_test" }],
+      [
+        { evidenceId: "old", behaviorIndex: 1 },
+        { evidenceId: "new", behaviorIndex: 1 },
+      ],
+    );
+    const oldRun = { ...checkRunEvidence("old", "unit_test", 0, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), attachedAt: "2026-07-19T01:00:00Z" };
+    const newRun = { ...checkRunEvidence("new", "unit_test", 0, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"), attachedAt: "2026-07-19T02:00:00Z" };
+    const result = judgeReport(input({ report, evidenceById: { old: oldRun, new: newRun } }));
+    expect(result.verdict).toBe("passed");
+    expect(result.sourceSha).toBe("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+  });
+
   it("スクショのビルドとテスト実行のソースが一致しなければ 確認できず", () => {
     const report = makeReport(
       [

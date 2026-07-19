@@ -39,8 +39,8 @@ beforeEach(() => {
 });
 
 const behaviors = [
-  { behavior: "ホーム上部に日付が表示される", check: "screenshot" },
-  { behavior: "時間帯に応じたあいさつが出る", check: "unit_test" },
+  { behavior: "ホーム上部に日付が表示される", change_kind: "appearance", check: "screenshot" },
+  { behavior: "時間帯に応じたあいさつが出る", change_kind: "logic", check: "unit_test" },
 ];
 
 const open = () => openReport({ worksitePath: worksite, title: "あいさつ表示", behaviors });
@@ -64,7 +64,7 @@ describe("openReport", () => {
     const result = openReport({
       worksitePath: worksite,
       title: "語彙テスト",
-      behaviors: [{ behavior: "何かが表示される", check: "スクショ" }],
+      behaviors: [{ behavior: "何かが表示される", change_kind: "appearance", check: "スクショ" }],
     });
     expect(result.status).toBe("rejected");
     if (result.status !== "rejected") throw new Error("expected rejected");
@@ -72,10 +72,55 @@ describe("openReport", () => {
     expect(result.fix).toContain("screenshot");
   });
 
+  it("語彙にない変更の種類は拒否される", () => {
+    const result = openReport({
+      worksitePath: worksite,
+      title: "種類テスト",
+      behaviors: [{ behavior: "何かが表示される", change_kind: "見た目", check: "screenshot" }],
+    });
+    expect(result.status).toBe("rejected");
+    if (result.status !== "rejected") throw new Error("expected rejected");
+    expect(result.reason).toContain("変更の種類");
+    expect(result.fix).toContain("appearance");
+  });
+
+  it("確かめ方が変更の種類の合格ラインを下回る計画は開けない(K-7 の前倒し)", () => {
+    const result = openReport({
+      worksitePath: worksite,
+      title: "下限テスト",
+      behaviors: [{ behavior: "タスクを追加できる", change_kind: "interaction", check: "screenshot" }],
+    });
+    expect(result.status).toBe("rejected");
+    if (result.status !== "rejected") throw new Error("expected rejected");
+    expect(result.reason).toContain("合格ラインを下回る");
+    expect(result.fix).toContain("interaction_log");
+    expect(result.fix).toContain("gate.yaml"); // 例外は人間が gate.yaml を変える(git に残る)
+  });
+
+  it("gate.yaml の passline 上書きが反映される(書いた種類だけ)", () => {
+    writeFileSync(join(worksite, "gate.yaml"), "passline:\n  interaction: [screenshot]\n");
+    const overridden = openReport({
+      worksitePath: worksite,
+      title: "上書きテスト",
+      behaviors: [{ behavior: "タスクを追加できる", change_kind: "interaction", check: "screenshot" }],
+    });
+    expect(overridden.status).toBe("ok");
+    const untouched = openReport({
+      worksitePath: worksite,
+      title: "上書き外テスト",
+      behaviors: [{ behavior: "計算が合う", change_kind: "logic", check: "screenshot" }],
+    });
+    expect(untouched.status).toBe("rejected"); // logic は同梱デフォルトのまま
+  });
+
   it("作業名が空でも動作が空文字でも拒否される", () => {
     expect(openReport({ worksitePath: worksite, title: "  ", behaviors }).status).toBe("rejected");
     expect(
-      openReport({ worksitePath: worksite, title: "x", behaviors: [{ behavior: "", check: "screenshot" }] }).status,
+      openReport({
+        worksitePath: worksite,
+        title: "x",
+        behaviors: [{ behavior: "", change_kind: "appearance", check: "screenshot" }],
+      }).status,
     ).toBe("rejected");
   });
 
@@ -93,7 +138,7 @@ describe("openReport", () => {
     const changed = openReport({
       worksitePath: worksite,
       title: "あいさつ表示",
-      behaviors: [{ behavior: "別の動作", check: "screenshot" }],
+      behaviors: [{ behavior: "別の動作", change_kind: "appearance", check: "screenshot" }],
     });
     expect(changed.status).toBe("rejected");
     if (changed.status !== "rejected") throw new Error("expected rejected");

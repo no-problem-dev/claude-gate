@@ -1,11 +1,22 @@
 import { Card, Chip } from "@heroui/react";
 import { useMemo } from "react";
-import { CHECK_LABEL, Evidence, REPORT_STATE_LABEL, Report, RepoDetail, buildTitle } from "./lib";
+import {
+  CHANGE_KIND_LABEL,
+  CHECK_LABEL,
+  Evidence,
+  REPORT_STATE_COLOR,
+  REPORT_STATE_LABEL,
+  Report,
+  RepoDetail,
+  buildTitle,
+  formatTime,
+} from "./lib";
 import { EvidenceThumb, SectionTitle } from "./BuildsTab";
 import { BuildDot, Time } from "./components";
 
 // 完了報告タブ: この仕組みの主役オブジェクト。
-// カバレッジ表 = 動作ごとに「確かめ方 / 証拠 / 覆われているか」(K-1 の人間向け表示)
+// カバレッジ表 = 動作ごとに「変更の種類 / 確かめ方 / 証拠 / 判定」(K-1 の人間向け表示)。
+// 判定の reason(不合格の理由・確認できずの代替手段)は人間向けの出口なので動作の行に出す
 
 export function ReportsTab({
   detail,
@@ -71,9 +82,14 @@ function ReportCard({
     <Card className="p-5">
       <header className="flex flex-wrap items-center gap-2.5">
         <h3 className="text-base font-semibold">{report.title}</h3>
-        <Chip color={report.state === "evidenced" ? "accent" : "default"} size="sm">
+        <Chip color={REPORT_STATE_COLOR[report.state]} size="sm">
           {REPORT_STATE_LABEL[report.state]}
         </Chip>
+        {report.judgment !== undefined && (
+          <span className="text-xs text-zinc-500 dark:text-zinc-400" title="判定した時刻">
+            判定 {formatTime(report.judgment.judgedAt)}
+          </span>
+        )}
         {report.buildIds.length > 1 && (
           <Chip
             color="warning"
@@ -91,11 +107,20 @@ function ReportCard({
         </span>
       </header>
 
-      <SectionTitle>カバレッジ — 動作 × 証拠</SectionTitle>
+      {report.judgment !== undefined && report.judgment.reasons.length > 0 && (
+        <ul className="mt-3 grid gap-1 rounded-xl border border-amber-500/40 bg-amber-500/8 p-3 text-[13px]">
+          {report.judgment.reasons.map((reason, i) => (
+            <li key={i}>⚠ {reason}</li>
+          ))}
+        </ul>
+      )}
+
+      <SectionTitle>カバレッジ — 動作 × 証拠 × 判定</SectionTitle>
       <ol className="grid gap-2">
         {report.behaviors.map((entry, i) => {
           const index = i + 1;
           const evidence = evidenceByBehavior.get(index) ?? [];
+          const verdict = report.judgment?.behaviors.find((b) => b.index === index);
           return (
             <li
               key={index}
@@ -106,10 +131,22 @@ function ReportCard({
                   {index}
                 </span>
                 <span className="min-w-0 flex-1 text-[13.5px] font-medium">{entry.behavior}</span>
-                <Chip color="default" size="sm">
+                {entry.change_kind !== undefined && (
+                  <Chip color="default" size="sm" title="変更の種類">
+                    {CHANGE_KIND_LABEL[entry.change_kind] ?? entry.change_kind}
+                  </Chip>
+                )}
+                <Chip color="default" size="sm" title="宣言した確かめ方">
                   {CHECK_LABEL[entry.check] ?? entry.check}
                 </Chip>
-                {evidence.length > 0 ? (
+                {verdict !== undefined ? (
+                  <Chip
+                    color={verdict.verdict === "ok" ? "success" : verdict.verdict === "ng" ? "danger" : "warning"}
+                    size="sm"
+                  >
+                    {verdict.verdict === "ok" ? "✓ OK" : verdict.verdict === "ng" ? "✕ NG" : "? 確認できず"}
+                  </Chip>
+                ) : evidence.length > 0 ? (
                   <Chip color="success" size="sm">
                     ✓ 証拠 {evidence.length}
                   </Chip>
@@ -119,6 +156,9 @@ function ReportCard({
                   </Chip>
                 )}
               </div>
+              {verdict?.reason !== undefined && (
+                <p className="mt-2 text-[12.5px] leading-relaxed text-zinc-600 dark:text-zinc-300">{verdict.reason}</p>
+              )}
               {evidence.length > 0 && (
                 <div className="mt-2.5 grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2.5">
                   {evidence.map((item) => (

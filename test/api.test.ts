@@ -31,7 +31,7 @@ function populate(): { repoKey: string; buildId: string; evidenceId: string } {
   const report = openReport({
     worksitePath: worksite,
     title: "あいさつ表示",
-    behaviors: [{ behavior: "日付が出る", check: "screenshot" }],
+    behaviors: [{ behavior: "日付が出る", change_kind: "appearance", check: "screenshot" }],
   });
   const build = registerBuild({ worksitePath: worksite, appPath: app });
   if (report.status !== "ok" || build.status !== "ok") throw new Error("expected ok");

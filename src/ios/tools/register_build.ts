@@ -1,9 +1,9 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { appendEvent } from "../../kernel/audit.js";
 import { readJson, repoDirOf, writeJson } from "../../kernel/store.js";
 import { buildIdOf, shortBuildId } from "../build_id.js";
+import { gitDirty, gitSha } from "../git.js";
 import type { Build, Reply } from "../words.js";
 
 export interface RegisterBuildArgs {
@@ -55,20 +55,4 @@ export function registerBuild(args: RegisterBuildArgs): Reply<Build> {
   writeJson(recordPath, build);
   appendEvent(gateDir, { tool: "register_build", result: "ok", buildId });
   return { status: "ok", state: build, nextSteps: ["attach_evidence"] };
-}
-
-function gitSha(worksitePath: string): string | null {
-  try {
-    return execFileSync("git", ["-C", worksitePath, "rev-parse", "HEAD"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return null; // コミットが1つもないリポジトリ。null として明示記録する(隠さない)
-  }
-}
-
-function gitDirty(worksitePath: string): boolean {
-  const out = execFileSync("git", ["-C", worksitePath, "status", "--porcelain"], { encoding: "utf8" });
-  return out.trim().length > 0;
 }

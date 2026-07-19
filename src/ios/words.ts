@@ -2,7 +2,8 @@
 
 export type Verdict = "ok" | "ng" | "unconfirmed";
 
-export type EvidenceKind = "screenshot" | "ui_snapshot" | "video";
+// 証拠の種類。check_run(確かめの記録)はゲート自身がコマンドを実行した結果(2b)
+export type EvidenceKind = "screenshot" | "ui_snapshot" | "video" | "check_run";
 
 // ビルド: 検証対象の成果物。buildId は成果物の中身から計算する(git の commit ID と同じ仕組み)
 // 記録は最初の登録時の事実で固定される(不変)。再登録時は応答の alreadyRegistered で既登録を明示する
@@ -17,21 +18,30 @@ export interface Build {
   registeredAt: string;
 }
 
-// 証拠: 1件の観測記録。出所(どのビルドを見たか)を持つ
+// 証拠: 1件の観測記録。出所を持つ。
+// シミュレータ観測(screenshot / ui_snapshot / video)の出所は「どのビルドを見たか」、
+// 確かめの記録(check_run)の出所は「どのソース(gitSha / dirty)でコマンドを実行したか」
 export interface Evidence {
-  evidenceId: string; // buildIdFull + kind + 観測ファイルの中身から決まる(べき等)
-  buildId: string;
+  evidenceId: string; // 中身から決まる(べき等)
   kind: EvidenceKind;
-  sourceFile: string; // 観測ファイルの元の場所
-  storedFile: string; // 不変コピーの場所
-  simulatorUdid: string;
-  bundleId: string;
+  storedFile: string; // 不変コピー(check_run は出力ログ)の場所
   note?: string;
   attachedAt: string;
+  // シミュレータ観測のみ
+  buildId?: string;
+  sourceFile?: string; // 観測ファイルの元の場所
+  simulatorUdid?: string;
+  bundleId?: string;
+  // 確かめの記録(check_run)のみ
+  check?: CheckKind;
+  command?: string;
+  exitCode?: number; // 終了コードが事実。ok/ng の解釈は判定(judge)の領分
+  gitSha?: string | null;
+  dirty?: boolean;
 }
 
-// 完了報告の状態(ドメインモデル §3.2)。2a では 下書き/証拠あり まで。合格系は 2b で追加
-export type ReportState = "draft" | "evidenced";
+// 完了報告の状態(ドメインモデル §3.2)。提出済み(submitted)はスライス3 で追加
+export type ReportState = "draft" | "evidenced" | "passed" | "failed" | "unconfirmed";
 
 // 確かめ方の語彙(ios-task-loop.md §3 対応表と 1:1)。
 // 自由文字列だと判定(2b)で下限と比較できない — 語彙外の確かめ方は宣言に使えない
@@ -58,10 +68,63 @@ export const CHECK_LABEL: Record<CheckKind, string> = {
   human_check: "人間確認",
 };
 
-// 動作一覧の1行: 動くと言っている動作(文)+ 使う確かめ方(確かめ計画)
+// 変更の種類の語彙(ios-task-loop.md §3 対応表と 1:1)。
+// K-7「確かめ方が下限以上か」は、何の変更かが宣言されないと機械比較できない
+export const CHANGE_KINDS = [
+  "logic", // ロジック
+  "appearance", // 見た目
+  "interaction", // 操作・遷移
+  "motion", // 動き
+  "data", // データ
+  "contract", // 契約
+  "config", // 設定
+  "system", // 連携
+] as const;
+export type ChangeKind = (typeof CHANGE_KINDS)[number];
+
+export const CHANGE_KIND_LABEL: Record<ChangeKind, string> = {
+  logic: "ロジック",
+  appearance: "見た目",
+  interaction: "操作・遷移",
+  motion: "動き",
+  data: "データ",
+  contract: "契約",
+  config: "設定",
+  system: "連携",
+};
+
+// 合格ライン: 変更の種類 → 使ってよい確かめ方(下限以上の集合)
+export type Passline = Record<ChangeKind, CheckKind[]>;
+
+// 見えないこと台帳の1行: この確かめ方では、このキーワードを含む動作は機械では確認できない
+export interface CannotSeeEntry {
+  checks: CheckKind[];
+  keywords: string[];
+  reason: string;
+  instead: string;
+}
+
+// 動作一覧の1行: 動くと言っている動作(文)+ 変更の種類 + 使う確かめ方(確かめ計画)。
+// change_kind が無いのは 2b 以前の旧形式(judge は 確認できず を返す)
 export interface BehaviorEntry {
   behavior: string;
+  change_kind?: ChangeKind;
   check: CheckKind;
+}
+
+// 動作ごとの判定(judge の出力の1行)
+export interface BehaviorVerdict {
+  index: number; // 1始まり(動作一覧の番号)
+  verdict: Verdict;
+  reason?: string;
+}
+
+// 判定結果: judge が報告レコードに保存する。証拠の集合が変わったら無効(削除される)
+export interface Judgment {
+  verdict: "passed" | "failed" | "unconfirmed";
+  behaviors: BehaviorVerdict[];
+  reasons: string[]; // 報告レベルの理由(ビルド混在・同一ソース不明 等)
+  judgedAt: string;
 }
 
 // 完了報告: エージェントの「できました」の型。動作一覧はオープン時に固定(変えたいなら別の作業名で開く)
@@ -73,6 +136,7 @@ export interface Report {
   evidence: { evidenceId: string; behaviorIndex: number }[];
   buildIds: string[]; // 紐づいた証拠の由来ビルド(重複なし)
   openedAt: string;
+  judgment?: Judgment;
 }
 
 // 全ツール共通の応答。rejected は reason(何がダメか)+ fix(どうすれば通るか)を必ず持つ。

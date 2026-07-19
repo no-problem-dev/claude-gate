@@ -1,6 +1,6 @@
 import { Button } from "@heroui/react";
 import { useEffect } from "react";
-import { Build, Evidence, KIND_LABEL, buildTitle, formatTimeFull } from "./lib";
+import { Build, CHECK_LABEL, Evidence, KIND_LABEL, buildTitle, evidenceCaption, evidenceIcon, formatTimeFull } from "./lib";
 import { AcceptBadge, BuildDot, NeutralChip } from "./components";
 
 // 証拠のシングルビュー: 原寸スクショ + 全メタデータ + 属すビルドへのリンク
@@ -49,7 +49,7 @@ export function Lightbox({
             />
           ) : (
             <a className="p-12 text-lg" href={fileUrl} target="_blank" rel="noreferrer">
-              {evidence.kind === "video" ? "🎞 ファイルを開く" : "🧩 ファイルを開く"}
+              {evidenceIcon(evidence.kind)} {evidence.kind === "check_run" ? "出力ログを開く" : "ファイルを開く"}
             </a>
           )}
         </div>
@@ -58,12 +58,12 @@ export function Lightbox({
             <AcceptBadge />
             <NeutralChip>{KIND_LABEL[evidence.kind]}</NeutralChip>
           </div>
-          {evidence.note && <p className="mt-2.5 text-[13px]">{evidence.note}</p>}
+          <p className="mt-2.5 text-[13px]">{evidenceCaption(evidence)}</p>
 
-          {build !== null && (
+          {build !== null && evidence.buildId !== undefined && (
             <button
               className="mt-1.5 inline-flex cursor-pointer items-center gap-1.5 text-xs text-zinc-600 transition-colors hover:text-blue-600 dark:text-zinc-300 dark:hover:text-blue-400"
-              onClick={() => onOpenBuild(evidence.buildId)}
+              onClick={() => onOpenBuild(evidence.buildId!)}
             >
               <BuildDot buildId={evidence.buildId} size={8} />
               {buildTitle(build)}
@@ -72,12 +72,32 @@ export function Lightbox({
 
           <dl className="mt-4 flex flex-col gap-2">
             <Meta label="受理">{formatTimeFull(evidence.attachedAt)}</Meta>
-            <Meta label="アプリ">
-              <span className="font-mono">{evidence.bundleId}</span>
-            </Meta>
-            <Meta label="シミュレータ">
-              <span className="font-mono text-xs">{evidence.simulatorUdid}</span>
-            </Meta>
+            {evidence.kind === "check_run" ? (
+              <>
+                <Meta label="確かめ方">{evidence.check !== undefined ? (CHECK_LABEL[evidence.check] ?? evidence.check) : "—"}</Meta>
+                <Meta label="コマンド">
+                  <span className="font-mono text-xs">{evidence.command}</span>
+                </Meta>
+                <Meta label="終了コード">
+                  <span className="font-mono">{evidence.exitCode}</span>
+                </Meta>
+                <Meta label="ソース">
+                  <span className="font-mono text-xs">
+                    {evidence.gitSha ? evidence.gitSha.slice(0, 10) : "コミットなし"}
+                    {evidence.dirty === true && "(+未コミットの変更あり)"}
+                  </span>
+                </Meta>
+              </>
+            ) : (
+              <>
+                <Meta label="アプリ">
+                  <span className="font-mono">{evidence.bundleId}</span>
+                </Meta>
+                <Meta label="シミュレータ">
+                  <span className="font-mono text-xs">{evidence.simulatorUdid}</span>
+                </Meta>
+              </>
+            )}
             <Meta label="証拠ID">
               <span className="font-mono">{evidence.evidenceId}</span>
             </Meta>

@@ -1,6 +1,6 @@
 import { Card, Chip } from "@heroui/react";
 import { useMemo } from "react";
-import { Build, Evidence, RepoDetail, buildTitle, eventSentence, formatTime } from "./lib";
+import { Build, Evidence, RepoDetail, buildTitle, eventSentence, evidenceCaption, evidenceIcon, formatTime } from "./lib";
 import { AcceptBadge, BuildDot, DirtyChip, RejectBadge, Time } from "./components";
 
 // ビルドタブ: マスター(一覧) ⇄ 詳細。ビルドは「何の・いつのビルドか」で名乗る(ID は二次表現)
@@ -19,6 +19,7 @@ export function BuildsTab({
   const evidenceByBuild = useMemo(() => {
     const map = new Map<string, Evidence[]>();
     for (const item of detail.evidence) {
+      if (item.buildId === undefined) continue; // 確かめの記録(check_run)はビルドではなくソースに属す
       const list = map.get(item.buildId) ?? [];
       list.push(item);
       map.set(item.buildId, list);
@@ -187,10 +188,10 @@ export function EvidenceThumb({
         />
       ) : (
         <span className="grid aspect-[9/12] place-items-center text-3xl" aria-hidden>
-          {item.kind === "video" ? "🎞" : "🧩"}
+          {evidenceIcon(item.kind)}
         </span>
       )}
-      <span className="clamp-2 px-2.5 py-2 text-xs text-zinc-600 dark:text-zinc-300">{item.note ?? "(note なし)"}</span>
+      <span className="clamp-2 px-2.5 py-2 text-xs text-zinc-600 dark:text-zinc-300">{evidenceCaption(item)}</span>
     </button>
   );
 }

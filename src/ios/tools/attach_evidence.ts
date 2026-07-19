@@ -4,13 +4,14 @@ import { extname, join } from "node:path";
 import { appendEvent } from "../../kernel/audit.js";
 import { readJson, repoDirOf, writeJson } from "../../kernel/store.js";
 import { buildIdOf, shortBuildId } from "../build_id.js";
+import { linkToReport, readReport, validateLink } from "../report_link.js";
 import { installedAppPath } from "../simulator.js";
-import type { Build, Evidence, EvidenceKind, Reply, Report } from "../words.js";
+import type { Build, Evidence, Reply, Report } from "../words.js";
 
 export interface AttachEvidenceArgs {
   worksitePath: string;
   buildId: string;
-  kind: EvidenceKind;
+  kind: "screenshot" | "ui_snapshot" | "video"; // check_run はゲート自身が作る(run_check)
   file: string;
   simulatorUdid: string;
   bundleId: string;
@@ -42,17 +43,9 @@ export function attachEvidence(args: AttachEvidenceArgs, deps: AttachEvidenceDep
   }
   let report: Report | null = null;
   if (wantsLink) {
-    report = readJson<Report>(join(gateDir, "reports", `${args.reportId}.json`));
-    if (report === null) {
-      return reject(`報告 ${args.reportId} が未オープン`, "先に open_report で報告を開いてください");
-    }
-    const index = args.behaviorIndex!;
-    if (!Number.isInteger(index) || index < 1 || index > report.behaviors.length) {
-      return reject(
-        `動作の番号 ${index} が範囲外(この報告の動作一覧は 1〜${report.behaviors.length})`,
-        "open_report の応答にある動作一覧の番号を使ってください",
-      );
-    }
+    report = readReport(gateDir, args.reportId!);
+    const invalid = validateLink(report, args.reportId!, args.behaviorIndex!);
+    if (invalid !== null) return reject(invalid.reason, invalid.fix);
   }
 
   const build = readJson<Build>(join(gateDir, "builds", `${args.buildId}.json`));
@@ -138,28 +131,4 @@ export function attachEvidence(args: AttachEvidenceArgs, deps: AttachEvidenceDep
     ...(linkNote !== "" && { note: linkNote.replace(/^。/, "") }),
     nextSteps: ["attach_evidence"],
   };
-}
-
-// 受理済みの証拠を報告の動作に紐づける。同じ紐づけはべき等。
-// 最初の証拠で状態を 下書き → 証拠あり に移す(FSM の移動はゲートだけが行う)
-function linkToReport(
-  gateDir: string,
-  report: Report,
-  behaviorIndex: number,
-  evidenceId: string,
-  buildId: string,
-): string {
-  const already = report.evidence.some((e) => e.evidenceId === evidenceId && e.behaviorIndex === behaviorIndex);
-  if (already) {
-    return `。報告「${report.title}」の動作${behaviorIndex}には既に紐づいている`;
-  }
-  report.evidence.push({ evidenceId, behaviorIndex });
-  if (!report.buildIds.includes(buildId)) report.buildIds.push(buildId);
-  const moved = report.state === "draft";
-  if (moved) report.state = "evidenced";
-  writeJson(join(gateDir, "reports", `${report.reportId}.json`), report);
-  if (moved) {
-    appendEvent(gateDir, { tool: "report_state", result: "ok", reportId: report.reportId, state: "evidenced" });
-  }
-  return `。報告「${report.title}」の動作${behaviorIndex}に紐づけた${moved ? "(状態: 下書き → 証拠あり)" : ""}`;
 }

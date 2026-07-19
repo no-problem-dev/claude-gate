@@ -10,6 +10,9 @@ export interface GateEvent {
   reportId?: string;
   behaviorIndex?: number;
   state?: string;
+  check?: string;
+  exitCode?: number;
+  verdict?: string;
   alreadyRegistered?: boolean;
   alreadyAttached?: boolean;
   alreadyOpened?: boolean;
@@ -40,21 +43,42 @@ export interface Build {
 
 export interface Evidence {
   evidenceId: string;
-  buildId: string;
-  kind: "screenshot" | "ui_snapshot" | "video";
-  sourceFile: string;
+  kind: "screenshot" | "ui_snapshot" | "video" | "check_run";
   storedFile: string;
-  simulatorUdid: string;
-  bundleId: string;
   note?: string;
   attachedAt: string;
+  // シミュレータ観測のみ
+  buildId?: string;
+  sourceFile?: string;
+  simulatorUdid?: string;
+  bundleId?: string;
+  // 確かめの記録(check_run)のみ
+  check?: string;
+  command?: string;
+  exitCode?: number;
+  gitSha?: string | null;
+  dirty?: boolean;
 }
 
-export type ReportState = "draft" | "evidenced";
+export type ReportState = "draft" | "evidenced" | "passed" | "failed" | "unconfirmed";
 
 export interface BehaviorEntry {
   behavior: string;
+  change_kind?: string;
   check: string;
+}
+
+export interface BehaviorVerdict {
+  index: number;
+  verdict: "ok" | "ng" | "unconfirmed";
+  reason?: string;
+}
+
+export interface Judgment {
+  verdict: "passed" | "failed" | "unconfirmed";
+  behaviors: BehaviorVerdict[];
+  reasons: string[];
+  judgedAt: string;
 }
 
 export interface Report {
@@ -65,11 +89,23 @@ export interface Report {
   evidence: { evidenceId: string; behaviorIndex: number }[];
   buildIds: string[];
   openedAt: string;
+  judgment?: Judgment;
 }
 
 export const REPORT_STATE_LABEL: Record<ReportState, string> = {
   draft: "下書き",
   evidenced: "証拠あり",
+  passed: "合格",
+  failed: "不合格",
+  unconfirmed: "確認できず",
+};
+
+export const REPORT_STATE_COLOR: Record<ReportState, "default" | "accent" | "success" | "danger" | "warning"> = {
+  draft: "default",
+  evidenced: "accent",
+  passed: "success",
+  failed: "danger",
+  unconfirmed: "warning",
 };
 
 // 確かめ方の語彙(ゲート words.ts と 1:1)。語彙導入前の記録は識別子のまま表示される
@@ -82,6 +118,18 @@ export const CHECK_LABEL: Record<string, string> = {
   video: "録画",
   launch_check: "起動確認",
   human_check: "人間確認",
+};
+
+// 変更の種類の語彙(ゲート words.ts と 1:1)
+export const CHANGE_KIND_LABEL: Record<string, string> = {
+  logic: "ロジック",
+  appearance: "見た目",
+  interaction: "操作・遷移",
+  motion: "動き",
+  data: "データ",
+  contract: "契約",
+  config: "設定",
+  system: "連携",
 };
 
 export interface RepoDetail {
@@ -143,7 +191,22 @@ export const KIND_LABEL: Record<Evidence["kind"], string> = {
   screenshot: "スクリーンショット",
   ui_snapshot: "UI スナップショット",
   video: "録画",
+  check_run: "確かめの記録",
 };
+
+export function evidenceIcon(kind: Evidence["kind"]): string {
+  return kind === "video" ? "🎞" : kind === "check_run" ? "🧪" : "🧩";
+}
+
+// 証拠の一言表示: シミュレータ観測は note、確かめの記録は何をどう実行した結果か
+export function evidenceCaption(item: Evidence): string {
+  if (item.kind === "check_run") {
+    const label = item.check !== undefined ? (CHECK_LABEL[item.check] ?? item.check) : "確かめ";
+    const outcome = item.exitCode === 0 ? "終了コード 0" : `終了コード ${item.exitCode}(赤)`;
+    return item.note ?? `${label}をゲートが実行 — ${outcome}`;
+  }
+  return item.note ?? "(note なし)";
+}
 
 // ビルドの見出し: ID ではなく「何の・いつのビルドか」で名乗る(docs/dashboard-design.md §4)
 export function buildTitle(build: Build): string {
@@ -168,8 +231,16 @@ export function eventSentence(event: GateEvent): string {
   if (event.tool === "open_report") {
     return event.result === "ok" ? `報告を開いた${again}` : "報告を開くのを拒否";
   }
+  if (event.tool === "run_check") {
+    const check = event.check !== undefined ? (CHECK_LABEL[event.check] ?? event.check) : "確かめ";
+    return event.result === "ok" ? `${check}を実行(終了コード ${event.exitCode})${again}` : `${check}の実行を拒否`;
+  }
+  if (event.tool === "judge") {
+    const verdict = REPORT_STATE_LABEL[event.verdict as ReportState] ?? event.verdict;
+    return event.result === "ok" ? `判定した — ${verdict}` : "判定を拒否";
+  }
   if (event.tool === "report_state") {
-    return `報告が「${event.state === "evidenced" ? "証拠あり" : event.state}」になった`;
+    return `報告が「${REPORT_STATE_LABEL[event.state as ReportState] ?? event.state}」になった`;
   }
   return event.tool;
 }

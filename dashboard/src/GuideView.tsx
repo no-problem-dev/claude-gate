@@ -96,6 +96,16 @@ export function GuideView() {
             別のビルドなら拒否(理由と直し方つき)。どの動作がまだ覆われていないかは
             完了報告タブのカバレッジ表に出る。
           </Step>
+          <Step n={6} name="確かめを実行" en="run_check">
+            テスト系(コンパイル・ユニットテスト・UIテスト)は、エージェントの「回しました」ではなく
+            <strong>ゲート自身がリポジトリの gate.yaml に宣言されたコマンドを実行</strong>し、
+            終了コードと出力ログをそのまま証拠にする。「テストを回したことにする」が構造的にできない。
+          </Step>
+          <Step n={7} name="判定" en="judge">
+            全動作が適合する証拠で覆われているかをゲートが<strong>決定論で照合</strong>し、
+            合格 / 不合格 / 確認できず を決める。動かしたエージェント自身は判定しない。
+            証拠が複数ビルドやソースにまたがる報告は合格にならない(確認できず)。
+          </Step>
         </ol>
         <div className="mt-3 flex flex-wrap gap-2">
           <Chip size="sm" color="default">実行は自由、採用は厳格</Chip>
@@ -140,6 +150,10 @@ export function GuideView() {
               <Word ja="証拠" en="evidence">受理された観測の記録(スクショ・録画)</Word>
               <Word ja="出所" en="source">その観測がどのビルドから取れたか</Word>
               <Word ja="判定" en="verdict">OK / NG / 確認できず の3値</Word>
+              <Word ja="変更の種類" en="change_kind">何を変えたか(ロジック / 見た目 / 操作・遷移 / 動き / データ / 契約 / 設定 / 連携)</Word>
+              <Word ja="合格ライン" en="passline">変更の種類ごとに使ってよい確かめ方。下げる例外は人間が gate.yaml を変える(git に残る)</Word>
+              <Word ja="確かめの記録" en="check_run">ゲート自身がコマンドを実行した結果(終了コード + 出力ログ)の証拠</Word>
+              <Word ja="見えないこと台帳" en="cannot_see">検証器に見えない領域のデータ(課金 × シミュレータ等)。一致したら判定は 確認できず</Word>
               <Word ja="検証器" en="verifier">観測を取る道具。見えないことがある</Word>
               <Word ja="ゲート" en="gate">受理を判断する常駐デーモン(この仕組みの実行実体)</Word>
               <Word ja="作業場" en="worksite">worktree + ビルド置き場 + 専用シミュレータの一式</Word>
@@ -167,12 +181,16 @@ export function GuideView() {
             報告を開く(動作一覧が空だと開けない)・動作ごとの証拠の紐づけ・カバレッジ表。
             「実行なき完了報告」に型で対抗
           </StatusRow>
-          <StatusRow chip={<Chip size="sm" color="default">次</Chip>} name="判定(スライス2b)">
-            決定論の判定(judge)・リポジトリ内の宣言 gate.yaml・見えないこと台帳
+          <StatusRow chip={<Chip size="sm" color="success">稼働中</Chip>} name="判定(スライス2b)">
+            決定論の判定(judge)・ゲートによる確かめの実行(run_check)・リポジトリ内の宣言 gate.yaml・
+            見えないこと台帳。見えない動作への OK は「確認できず」に変換され、人間に渡る
+          </StatusRow>
+          <StatusRow chip={<Chip size="sm" color="default">次</Chip>} name="提出の一本化(スライス3)">
+            合格した報告だけが push / PR できる。それまでの提出判断は人間
           </StatusRow>
         </div>
         <h3 className="mt-6 mb-2 text-[13px] font-semibold">
-          全体像 — 完了報告の一生(下書き → 証拠あり は稼働中。判定から先はスライス2b/3)
+          全体像 — 完了報告の一生(判定まで稼働中。提出済みはスライス3)
         </h3>
         <Card className="p-4">
           <ReportStateDiagram />

@@ -5,11 +5,13 @@ import { Time } from "./components";
 import { BuildsTab } from "./BuildsTab";
 import { EvidenceTab } from "./EvidenceTab";
 import { ActivityTab } from "./ActivityTab";
+import { GuideView } from "./GuideView";
 import { Lightbox } from "./Lightbox";
 
 const POLL_MS = 5000;
 
 export type Tab = "builds" | "evidence" | "activity";
+type View = "state" | "guide";
 
 export function App() {
   const [repos, setRepos] = useState<RepoSummary[] | null>(null);
@@ -19,6 +21,7 @@ export function App() {
   const [selectedBuildId, setSelectedBuildId] = useState<string | null>(null);
   const [lightboxEvidenceId, setLightboxEvidenceId] = useState<string | null>(null);
   const [daemonOk, setDaemonOk] = useState(true);
+  const [view, setView] = useState<View>("state");
 
   const refresh = useCallback(async () => {
     try {
@@ -73,6 +76,7 @@ export function App() {
   }, [detail, selectedBuildId]);
 
   const selectRepo = (repoKey: string) => {
+    setView("state");
     if (repoKey === selectedRepoKey) return;
     setSelectedRepoKey(repoKey);
     setSelectedBuildId(null);
@@ -104,6 +108,15 @@ export function App() {
             <p className="text-xs text-zinc-500 dark:text-zinc-400">証拠つき完了報告</p>
           </div>
         </div>
+
+        <button
+          className={`mx-2 mb-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-left text-sm font-semibold transition-colors hover:bg-black/4 dark:hover:bg-white/5 ${
+            view === "guide" ? "bg-black/5 dark:bg-white/8" : ""
+          }`}
+          onClick={() => setView("guide")}
+        >
+          <span aria-hidden>📖</span> この仕組みのガイド
+        </button>
 
         <h2 className="px-4 pt-2 pb-1 text-[11px] font-semibold tracking-widest text-zinc-500 uppercase dark:text-zinc-400">
           リポジトリ
@@ -147,7 +160,9 @@ export function App() {
       </aside>
 
       <main className="min-w-0 max-w-[1080px] px-5 pt-6 pb-16 md:px-7">
-        {detail === null ? (
+        {view === "guide" ? (
+          <GuideView />
+        ) : detail === null ? (
           <p className="p-6 text-zinc-500 dark:text-zinc-400">
             {repos?.length === 0 ? "" : "リポジトリを選択してください"}
           </p>

@@ -39,8 +39,12 @@ export function RejectBadge() {
 
 export function DirtyChip() {
   return (
-    <Chip color="warning" size="sm" title="未コミットの変更を含む状態からビルドされた">
-      ⚠ dirty
+    <Chip
+      color="warning"
+      size="sm"
+      title="コミットしていない変更を含むソースからビルドされた(どのコミットの成果物か確定できない)"
+    >
+      ⚠ 未コミット変更あり
     </Chip>
   );
 }

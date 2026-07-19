@@ -104,7 +104,7 @@ function BuildDetail({
       <dl className="mt-3 flex flex-wrap gap-x-7 gap-y-2">
         <Fact label="コミット">
           <span className="font-mono">{build.gitSha ? build.gitSha.slice(0, 10) : "なし"}</span>
-          {build.dirty && <span className="text-zinc-500 dark:text-zinc-400">(+未コミットの変更)</span>}
+          {build.dirty && <span className="text-zinc-500 dark:text-zinc-400">(+未コミットの変更あり)</span>}
         </Fact>
         <Fact label="登録">{formatTime(build.registeredAt)}</Fact>
         <Fact label="ビルドID">

@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { forgetBuild, forgetEvidence, forgetRepo, forgetReport, resolveRepoKey } from "./kernel/forget.js";
 import { gateHome } from "./kernel/store.js";
 
 const port = Number(process.env.GATE_PORT ?? 7350);
@@ -22,8 +23,45 @@ switch (command) {
   case "doctor":
     await doctor();
     break;
+  case "forget":
+    forget(process.argv.slice(3));
+    break;
   default:
     help();
+}
+
+// 掃除(人間の操作。エージェントには MCP ツールとして公開しない)
+function forget(args: string[]): void {
+  const [target, flag, id] = args;
+  if (!target) {
+    console.log("usage: claude-gate forget <repoKey|path> [--build <id> | --report <id> | --evidence <id>]");
+    process.exitCode = 1;
+    return;
+  }
+  const repoKey = resolveRepoKey(target);
+  if (repoKey === null) {
+    console.log(`✗ リポジトリが見つからない: ${target}(repoKey 12桁か、台帳に載っているパスを渡してください)`);
+    process.exitCode = 1;
+    return;
+  }
+  const outcome =
+    flag === undefined
+      ? forgetRepo(repoKey)
+      : flag === "--build" && id
+        ? forgetBuild(repoKey, id)
+        : flag === "--report" && id
+          ? forgetReport(repoKey, id)
+          : flag === "--evidence" && id
+            ? forgetEvidence(repoKey, id)
+            : null;
+  if (outcome === null) {
+    console.log(`✗ 不明なオプション: ${flag}(--build / --report / --evidence + ID)`);
+    process.exitCode = 1;
+    return;
+  }
+  const mark = outcome.status === "removed" ? "✓" : outcome.status === "already-gone" ? "○" : "✗";
+  console.log(`${mark} ${outcome.detail}`);
+  if (outcome.status === "refused") process.exitCode = 1;
 }
 
 // launchd に常駐させる(何度実行しても安全)
@@ -144,5 +182,7 @@ function help(): void {
 
   serve    サーバをこのプロセスで起動する(開発用)
   install  launchd に常駐させる(べき等)
-  doctor   稼働状態を点検する(デーモン/ダッシュボード/プラグイン)`);
+  doctor   稼働状態を点検する(デーモン/ダッシュボード/プラグイン)
+  forget   掃除(人間の操作): リポジトリの状態 / --build / --report / --evidence を削除
+           参照されている記録は消せない。レコード単位の削除は監査ログに残る`);
 }

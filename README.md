@@ -1,41 +1,24 @@
 # claude-gate
 
-AI との iOS 開発で、エージェントの「できました」に証拠を義務づけ、証拠の出所を機械で確かめ、確かめられたものだけを提出するためのゲート。マシンに1つ常駐するローカル MCP サーバ(HTTP・127.0.0.1:7350)+ 人間向けダッシュボード。
+AI との iOS 開発で、エージェントの「できました」に証拠を義務づけるゲート。
 
-このリポジトリに実行実体のすべてが入っている:
+エージェントの作業(実装・ビルド・シミュレータ操作)は縛らない。締めるのは3点だけ:
+
+- **証拠の受理**: 観測(スクショ等)は、シミュレータ内の実物とビルドID を照合して一致したときだけ証拠になる
+- **判定**: 宣言した全動作が証拠で覆われているかを、ゲートが決定論で判定する(エージェントは自己判定できない)
+- **提出**: 合格した報告の、検証されたそのソース(HEAD 一致)だけが `git push` できる
+
+完了報告は1本の状態機械で進む: **下書き → 証拠あり → 合格 / 不合格 / 確認できず → 提出済み**。仕組みの説明書はダッシュボードの「ガイド」画面にある。
+
+## 構成
+
+実行実体のすべてがこのリポジトリに入っている:
 
 | 層 | 場所 | 内容 |
 |---|---|---|
-| デーモン | `src/` → `dist/` | HTTP MCP サーバ + 読み取り API + CLI(`claude-gate`) |
-| ダッシュボード | `dashboard/` | 人間向けの状態表示(React)。デーモンが `/` で配信 |
-| Claude Code プラグイン | `.claude-plugin/` + `.mcp.json` + `skills/` | gate MCP 接続定義 + gate-loop スキル(使い方の規定) |
-
-設計文書はこのリポジトリの `docs/`:
-
-- `docs/architecture.md` — 実装の構造と設計原則
-- `docs/dashboard-design.md` — ダッシュボードの設計(オブジェクト指向 UI)
-
-語彙(日本語の正式名 ⇄ 英語識別子の対訳)は `src/ios/words.ts` が定義。人間向けの説明書はダッシュボードの「ガイド」画面(思想・ループ・語彙・稼働状況)。
-
-## いま出来ること(スライス1〜3 稼働中)
-
-完了報告の一生(下書き → 証拠あり → 合格/不合格/確認できず → 提出済み)が全部ゲートを通る:
-
-| ツール | 内容 |
-|---|---|
-| `ping` | 生存確認 |
-| `open_report` | 報告を開く。作業名 + 動作一覧(動作 × 変更の種類 × 確かめ方)を宣言。空の一覧・合格ライン未満の計画は開けない |
-| `register_build` | ビルドを登録する。`.app` の中身からビルドID を計算(git の commit ID と同じ仕組み) |
-| `attach_evidence` | 証拠を付ける。受理前にシミュレータ内の実物と ID 照合し、別のビルドなら拒否する |
-| `run_check` | 確かめを実行する。gate.yaml の checks 宣言コマンドをゲート自身が実行し、終了コード + ログを証拠化(テストの自己申告を排除) |
-| `judge` | 判定する。決定論で 合格/不合格/確認できず(動作ごとの理由つき)。見えないこと台帳・同一ビルド/同一ソース要件込み |
-| `submit` | 提出する。合格 + 検証したソース == HEAD を照合して `git push origin HEAD`(PR 作成は未実装) |
-
-掃除は人間の CLI(`claude-gate forget`)。エージェントの語彙(MCP)には「記録を消す」を入れない。
-
-リポジトリ側の宣言はルートの `gate.yaml`(env / worksite / checks / passline / cannot_see。全セクション任意)。
-
-ダッシュボード(http://127.0.0.1:7350/)は全リポジトリ横断で、完了報告(カバレッジ表・判定・提出)・ビルド・証拠・できごとを一覧する。読み取り専用: 状態を変えられるのは MCP ツールだけ。
+| デーモン | `src/` → `dist/` | HTTP MCP サーバ(127.0.0.1:7350・マシンに1プロセス)+ CLI(`claude-gate`) |
+| ダッシュボード | `dashboard/` | 人間向けの状態表示 + ガイド。デーモンが `/` で配信(読み取り専用) |
+| Claude Code プラグイン | `.claude-plugin/` + `.mcp.json` + `skills/` + `hooks/` | MCP 接続定義 + gate-loop スキル + git push 遮断 hook |
 
 ## セットアップ(初回だけ)
 
@@ -52,11 +35,11 @@ claude-gate install                        # launchd 常駐 + 稼働確認
 claude plugin install claude-gate@taniguchi-kyoichi
 ```
 
-これで全ディレクトリ・全セッションで gate ツールと gate-loop スキルが使える。プロジェクト側に置くファイルはゼロ。
+これで全ディレクトリ・全セッションで gate ツールと gate-loop スキルが使える。プロジェクト側に置くファイルはゼロ。ゲート運用にするリポジトリだけ、ルートに宣言ファイル `gate.yaml`(env / worksite / checks / passline / cannot_see。全セクション任意)を置く。
 
-## 再起動したら
+## 日常の運用
 
-**何もしなくてよい。** launchd(`RunAtLoad` + `KeepAlive`)がログイン時にデーモンを自動起動する。調子が悪いときだけ:
+**PC 再起動後は何もしなくてよい**(launchd がログイン時に自動起動)。調子が悪いときだけ:
 
 ```bash
 claude-gate doctor    # launchd / デーモン / ダッシュボード / プラグインを一括点検(直し方も出る)
@@ -68,20 +51,22 @@ claude-gate install   # 直すのはこれ一発(べき等)
 | 変えたもの | 反映コマンド |
 |---|---|
 | デーモン・ダッシュボード(`src/` `dashboard/`) | `npm run build && claude-gate install` |
-| プラグイン(`skills/` `hooks/` `.mcp.json`) | plugin.json の version を上げて GitHub へ push → `claude plugin update claude-gate@taniguchi-kyoichi` → セッション再起動 or `/reload-plugins`(ツール一覧は `/mcp reconnect`) |
+| プラグイン(`skills/` `hooks/` `.mcp.json` `.claude-plugin/`) | plugin.json の version を上げて push → `claude plugin update claude-gate@taniguchi-kyoichi` → `/reload-plugins`(ツール一覧は `/mcp reconnect`) |
 
-プラグインの実体は marketplace キャッシュ(`~/.claude/plugins/cache/`)で、ローカルリポの編集は update を回すまで配布されない。
+プラグインの実体は marketplace キャッシュで、ローカルリポの編集は update を回すまで配布されない。
 
-## データの場所
+記録の掃除は人間の CLI だけ(エージェントの語彙には「記録を消す」を入れない):
 
-ローカルデータは `~/.claude-gate/` に置く(普通のアプリと同じ):
-
-```
-~/.claude-gate/
-  repos.json               # 既知リポジトリの台帳
-  repos/<repoKey>/         # リポジトリごとの状態(repoKey = git 共有ディレクトリの実パスのハッシュ)
-    builds/  evidence/  events.jsonl
-  logs/
+```bash
+claude-gate forget <repoKey|path> [--build <id> | --report <id> | --evidence <id>]
 ```
 
-リポジトリの同定は git 共有ディレクトリの実パスで行うため、worktree をいくつ作って消しても状態は同じ場所に残る。
+## 知りたいことはどこにあるか
+
+| 知りたいこと | 場所 |
+|---|---|
+| 思想・ループ・語彙(人間向けの説明書) | ダッシュボード http://127.0.0.1:7350/ の「ガイド」 |
+| 実装の構造・設計原則・データの置き場・テスト | [`docs/architecture.md`](docs/architecture.md) |
+| ツールの一覧・引数・拒否条件 | `src/kernel/server.ts` の登録定義(実装が正) |
+| 語彙の定義(日本語の正式名 ⇄ 英語識別子) | `src/ios/words.ts` |
+| ダッシュボードの設計 | [`docs/dashboard-design.md`](docs/dashboard-design.md) |

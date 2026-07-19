@@ -6,7 +6,7 @@ export type Verdict = "ok" | "ng" | "unconfirmed";
 export type EvidenceKind = "screenshot" | "ui_snapshot" | "video" | "check_run";
 
 // ビルド: 検証対象の成果物。buildId は成果物の中身から計算する(git の commit ID と同じ仕組み)
-// 記録は最初の登録時の事実で固定される(不変)。再登録時は応答の alreadyRegistered で既登録を明示する
+// 記録は最初の登録時の事実で固定される(不変)。再登録時は応答の note で既登録を明示する
 export interface Build {
   buildId: string; // 表示・参照用の短縮形(先頭12文字)
   buildIdFull: string; // 照合はこちらで行う

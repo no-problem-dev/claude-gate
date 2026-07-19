@@ -152,13 +152,14 @@ export function GuideView() {
               <Word ja="完了報告" en="report">「できました」の型。作業名と動作一覧を持つ(空の一覧では開けない)</Word>
               <Word ja="ビルド" en="build">検証対象の成果物</Word>
               <Word ja="ビルドID" en="build_id">中身から計算する同一性。偽れない</Word>
-              <Word ja="証拠" en="evidence">受理された観測の記録(スクショ・録画)</Word>
+              <Word ja="証拠" en="evidence">受理された観測の記録(スクショ・UIスナップショット・録画・確かめの記録)</Word>
               <Word ja="出所" en="source">その観測がどのビルドから取れたか</Word>
               <Word ja="判定" en="verdict">OK / NG / 確認できず の3値</Word>
               <Word ja="変更の種類" en="change_kind">何を変えたか(ロジック / 見た目 / 操作・遷移 / 動き / データ / 契約 / 設定 / 連携)</Word>
+              <Word ja="確かめ方" en="check">動作をどう確かめるか(コンパイル / ユニットテスト / スクショ / 操作記録 / UIテスト / 録画 / 起動確認 / 人間確認)。宣言に使える語彙はこの8つに固定</Word>
               <Word ja="合格ライン" en="passline">変更の種類ごとに使ってよい確かめ方。下げる例外は人間が gate.yaml を変える(git に残る)</Word>
               <Word ja="確かめの記録" en="check_run">ゲート自身がコマンドを実行した結果(終了コード + 出力ログ)の証拠</Word>
-              <Word ja="見えないこと台帳" en="cannot_see">検証器に見えない領域のデータ(課金 × シミュレータ等)。一致したら判定は 確認できず</Word>
+              <Word ja="見えないこと台帳" en="cannot_see registry">検証器に見えない領域のデータ(課金 × シミュレータ等)。一致したら判定は 確認できず</Word>
               <Word ja="検証器" en="verifier">観測を取る道具。見えないことがある</Word>
               <Word ja="ゲート" en="gate">受理を判断する常駐デーモン(この仕組みの実行実体)</Word>
               <Word ja="作業場" en="worksite">worktree + ビルド置き場 + 専用シミュレータの一式</Word>

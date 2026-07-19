@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -18,6 +18,9 @@ import { evidenceFilePath, overview, repoDetail } from "./api.js";
 // ゲートはマシンに1プロセス(単一プロセスなので状態の書き込みは直列)。
 // セッションごとの状態は持たない: 全ツールが対象を明示引数で受ける。
 
+const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const { version } = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8")) as { version: string };
+
 const asContent = (value: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
 });
@@ -36,7 +39,7 @@ const asReply = (run: () => unknown) => {
 };
 
 function newServer(): McpServer {
-  const server = new McpServer({ name: "claude-gate", version: "0.10.0" });
+  const server = new McpServer({ name: "claude-gate", version });
 
   server.registerTool(
     "ping",
@@ -157,7 +160,7 @@ const app = express();
 app.use(express.json({ limit: "20mb" }));
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, name: "claude-gate", version: "0.10.0", pid: process.pid });
+  res.json({ ok: true, name: "claude-gate", version, pid: process.pid });
 });
 
 app.post("/mcp", async (req, res) => {
@@ -199,7 +202,7 @@ app.get("/api/evidence/:repoKey/:evidenceId/file", (req, res) => {
 });
 
 // ビルド済みダッシュボード(dashboard/dist)を / で配信する
-const dashboardDist = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "dashboard", "dist");
+const dashboardDist = join(rootDir, "dashboard", "dist");
 if (existsSync(dashboardDist)) {
   app.use(express.static(dashboardDist));
   app.get("*", (req, res, next) => {

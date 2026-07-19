@@ -1,7 +1,7 @@
 import type { CannotSeeEntry, Passline } from "./words.js";
 
 // ゲート同梱のデフォルト(gate.yaml が無くても動く)。
-// 各行は実事故・実記録に由来する(life リポ os/write/ios-gate-spec2.md §2b)
+// 各行は実際に起きた事故・実記録に由来する(推測で行を増やさない)
 
 // 合格ライン: 変更の種類 → 使ってよい確かめ方(ios-task-loop.md §3 対応表の機械化)。
 // gate.yaml の passline は「書いた種類だけ」この表を置き換える

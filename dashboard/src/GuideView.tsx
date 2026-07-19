@@ -3,7 +3,7 @@ import { SectionTitle } from "./BuildsTab";
 import { LoopDiagram, ReportStateDiagram, VerifyDiagram } from "./Diagrams";
 
 // ガイド: この仕組み(形式言語)の人間向け説明書。
-// 内容は言語定義(life リポ os/write/ios-domain-model.md ほか)のレンダリング。
+// 内容は言語定義(src/ios/words.ts の語彙)のレンダリング。
 // 言語を変えたらここも同じ変更で更新する(docs/dashboard-design.md §5)
 
 export function GuideView() {
@@ -209,7 +209,7 @@ export function GuideView() {
         </Card>
 
         <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
-          言語定義の SSOT は life リポジトリの os/write/(ios-domain-model.md ほか)。この画面はその人間向けの説明で、言語の変更と一緒に更新される。
+          この画面は言語定義の人間向けの説明で、言語の変更と一緒に更新される。
         </p>
       </section>
     </div>

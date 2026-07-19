@@ -1,4 +1,4 @@
-// 対訳表(life repo: os/write/ios-domain-model.md 付録)と 1:1。表にない語は使わない。
+// 語彙の定義: 日本語の正式名と英語識別子の 1:1 対訳。ここにない語は実装に登場させない。
 
 export type Verdict = "ok" | "ng" | "unconfirmed";
 

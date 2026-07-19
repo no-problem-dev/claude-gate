@@ -10,15 +10,12 @@ AI との iOS 開発で、エージェントの「できました」に証拠を
 | ダッシュボード | `dashboard/` | 人間向けの状態表示(React)。デーモンが `/` で配信 |
 | Claude Code プラグイン | `.claude-plugin/` + `.mcp.json` + `skills/` | gate MCP 接続定義 + gate-loop スキル(使い方の規定) |
 
-設計文書の SSOT は life リポジトリの `os/write/`:
+設計文書はこのリポジトリの `docs/`:
 
-- `ios-domain-model.md` — ドメインモデル(完了報告と証拠・**対訳表 = 語彙の SSOT**)
-- `ios-task-loop.md` — タスク一枚のループ(変更の種類 → 最低限の確かめ方)
-- `ios-gate-implementation.md` — 実装方針(素通し / 採用時に確かめる / ゲートのみ)
-- `ios-parallel.md` — 並列と冪等(デーモン1台・全操作べき等)
-- `ios-gate-spec.md` / `ios-gate-spec2.md` / `ios-gate-spec3.md` — スライス1〜3の実装仕様
-- `ios-gate-distribution.md` — 配布3層(npm / プラグイン / ローカルデータ)
-- `ios-dogfood-notes.md` — ドッグフード観察の台帳(改善は全部ここから)
+- `docs/architecture.md` — 実装の構造と設計原則
+- `docs/dashboard-design.md` — ダッシュボードの設計(オブジェクト指向 UI)
+
+語彙(日本語の正式名 ⇄ 英語識別子の対訳)は `src/ios/words.ts` が定義。人間向けの説明書はダッシュボードの「ガイド」画面(思想・ループ・語彙・稼働状況)。
 
 ## いま出来ること(スライス1〜3 稼働中)
 

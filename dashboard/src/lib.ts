@@ -72,6 +72,18 @@ export const REPORT_STATE_LABEL: Record<ReportState, string> = {
   evidenced: "証拠あり",
 };
 
+// 確かめ方の語彙(ゲート words.ts と 1:1)。語彙導入前の記録は識別子のまま表示される
+export const CHECK_LABEL: Record<string, string> = {
+  compile: "コンパイル",
+  unit_test: "ユニットテスト",
+  screenshot: "スクショ",
+  interaction_log: "操作記録",
+  ui_test: "UIテスト",
+  video: "録画",
+  launch_check: "起動確認",
+  human_check: "人間確認",
+};
+
 export interface RepoDetail {
   repoKey: string;
   name: string;

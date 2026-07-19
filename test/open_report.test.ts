@@ -39,8 +39,8 @@ beforeEach(() => {
 });
 
 const behaviors = [
-  { behavior: "ホーム上部に日付が表示される", check: "スクショ" },
-  { behavior: "時間帯に応じたあいさつが出る", check: "ユニットテスト" },
+  { behavior: "ホーム上部に日付が表示される", check: "screenshot" },
+  { behavior: "時間帯に応じたあいさつが出る", check: "unit_test" },
 ];
 
 const open = () => openReport({ worksitePath: worksite, title: "あいさつ表示", behaviors });
@@ -60,10 +60,22 @@ describe("openReport", () => {
     expect(result.reason).toContain("動作一覧が空");
   });
 
+  it("語彙にない確かめ方は拒否され、fix に語彙一覧が入る", () => {
+    const result = openReport({
+      worksitePath: worksite,
+      title: "語彙テスト",
+      behaviors: [{ behavior: "何かが表示される", check: "スクショ" }],
+    });
+    expect(result.status).toBe("rejected");
+    if (result.status !== "rejected") throw new Error("expected rejected");
+    expect(result.reason).toContain("語彙にない");
+    expect(result.fix).toContain("screenshot");
+  });
+
   it("作業名が空でも動作が空文字でも拒否される", () => {
     expect(openReport({ worksitePath: worksite, title: "  ", behaviors }).status).toBe("rejected");
     expect(
-      openReport({ worksitePath: worksite, title: "x", behaviors: [{ behavior: "", check: "スクショ" }] }).status,
+      openReport({ worksitePath: worksite, title: "x", behaviors: [{ behavior: "", check: "screenshot" }] }).status,
     ).toBe("rejected");
   });
 
@@ -81,7 +93,7 @@ describe("openReport", () => {
     const changed = openReport({
       worksitePath: worksite,
       title: "あいさつ表示",
-      behaviors: [{ behavior: "別の動作", check: "スクショ" }],
+      behaviors: [{ behavior: "別の動作", check: "screenshot" }],
     });
     expect(changed.status).toBe("rejected");
     if (changed.status !== "rejected") throw new Error("expected rejected");

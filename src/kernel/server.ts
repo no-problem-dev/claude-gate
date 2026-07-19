@@ -8,6 +8,7 @@ import { z } from "zod";
 import { attachEvidence } from "../ios/tools/attach_evidence.js";
 import { openReport } from "../ios/tools/open_report.js";
 import { registerBuild } from "../ios/tools/register_build.js";
+import { CHECK_KINDS } from "../ios/words.js";
 import { evidenceFilePath, overview, repoDetail } from "./api.js";
 
 // ゲートはマシンに1プロセス(単一プロセスなので状態の書き込みは直列)。
@@ -31,7 +32,7 @@ const asReply = (run: () => unknown) => {
 };
 
 function newServer(): McpServer {
-  const server = new McpServer({ name: "claude-gate", version: "0.7.0" });
+  const server = new McpServer({ name: "claude-gate", version: "0.8.0" });
 
   server.registerTool(
     "ping",
@@ -51,7 +52,11 @@ function newServer(): McpServer {
           .array(
             z.object({
               behavior: z.string().describe("動くと言っている動作(文で書く)"),
-              check: z.string().describe("使う確かめ方(例: ユニットテスト / スクショ / 実機操作)"),
+              check: z
+                .enum(CHECK_KINDS)
+                .describe(
+                  "使う確かめ方(語彙固定): compile=コンパイル / unit_test=ユニットテスト / screenshot=スクショ / interaction_log=操作記録 / ui_test=UIテスト / video=録画 / launch_check=起動確認 / human_check=人間確認",
+                ),
             }),
           )
           .describe("動作一覧 + 確かめ計画。並び順が番号(1始まり)になる"),
@@ -102,7 +107,7 @@ const app = express();
 app.use(express.json({ limit: "20mb" }));
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, name: "claude-gate", version: "0.7.0", pid: process.pid });
+  res.json({ ok: true, name: "claude-gate", version: "0.8.0", pid: process.pid });
 });
 
 app.post("/mcp", async (req, res) => {

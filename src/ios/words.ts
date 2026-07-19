@@ -33,10 +33,35 @@ export interface Evidence {
 // 完了報告の状態(ドメインモデル §3.2)。2a では 下書き/証拠あり まで。合格系は 2b で追加
 export type ReportState = "draft" | "evidenced";
 
+// 確かめ方の語彙(ios-task-loop.md §3 対応表と 1:1)。
+// 自由文字列だと判定(2b)で下限と比較できない — 語彙外の確かめ方は宣言に使えない
+export const CHECK_KINDS = [
+  "compile", // コンパイル
+  "unit_test", // ユニットテスト
+  "screenshot", // スクショ
+  "interaction_log", // 操作記録(操作列 + 結果スクショ)
+  "ui_test", // UIテスト(XCUITest)
+  "video", // 録画
+  "launch_check", // 起動確認
+  "human_check", // 人間確認
+] as const;
+export type CheckKind = (typeof CHECK_KINDS)[number];
+
+export const CHECK_LABEL: Record<CheckKind, string> = {
+  compile: "コンパイル",
+  unit_test: "ユニットテスト",
+  screenshot: "スクショ",
+  interaction_log: "操作記録",
+  ui_test: "UIテスト",
+  video: "録画",
+  launch_check: "起動確認",
+  human_check: "人間確認",
+};
+
 // 動作一覧の1行: 動くと言っている動作(文)+ 使う確かめ方(確かめ計画)
 export interface BehaviorEntry {
   behavior: string;
-  check: string;
+  check: CheckKind;
 }
 
 // 完了報告: エージェントの「できました」の型。動作一覧はオープン時に固定(変えたいなら別の作業名で開く)

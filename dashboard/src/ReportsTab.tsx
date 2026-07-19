@@ -1,6 +1,6 @@
 import { Card, Chip } from "@heroui/react";
 import { useMemo } from "react";
-import { Evidence, REPORT_STATE_LABEL, Report, RepoDetail, buildTitle } from "./lib";
+import { CHECK_LABEL, Evidence, REPORT_STATE_LABEL, Report, RepoDetail, buildTitle } from "./lib";
 import { EvidenceThumb, SectionTitle } from "./BuildsTab";
 import { BuildDot, Time } from "./components";
 
@@ -74,6 +74,15 @@ function ReportCard({
         <Chip color={report.state === "evidenced" ? "accent" : "default"} size="sm">
           {REPORT_STATE_LABEL[report.state]}
         </Chip>
+        {report.buildIds.length > 1 && (
+          <Chip
+            color="warning"
+            size="sm"
+            title="動作ごとに別のビルドの証拠が混ざっている。最新のビルドで全動作が動くことの保証にはならない"
+          >
+            ⚠ 複数ビルドの証拠が混在
+          </Chip>
+        )}
         <span className="text-xs text-zinc-500 dark:text-zinc-400">
           動作 {covered}/{report.behaviors.length} が証拠で覆われている
         </span>
@@ -98,7 +107,7 @@ function ReportCard({
                 </span>
                 <span className="min-w-0 flex-1 text-[13.5px] font-medium">{entry.behavior}</span>
                 <Chip color="default" size="sm">
-                  {entry.check}
+                  {CHECK_LABEL[entry.check] ?? entry.check}
                 </Chip>
                 {evidence.length > 0 ? (
                   <Chip color="success" size="sm">

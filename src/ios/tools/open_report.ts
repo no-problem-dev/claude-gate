@@ -2,13 +2,16 @@ import { createHash } from "node:crypto";
 import { basename, join } from "node:path";
 import { appendEvent } from "../../kernel/audit.js";
 import { readJson, repoDirOf, writeJson } from "../../kernel/store.js";
-import type { BehaviorEntry, Reply, Report } from "../words.js";
+import { CHECK_KINDS, CHECK_LABEL } from "../words.js";
+import type { BehaviorEntry, CheckKind, Reply, Report } from "../words.js";
 
 export interface OpenReportArgs {
   worksitePath: string;
   title: string;
-  behaviors: BehaviorEntry[];
+  behaviors: { behavior: string; check: string }[];
 }
+
+const CHECK_VOCABULARY = CHECK_KINDS.map((kind) => `${kind}(${CHECK_LABEL[kind]})`).join(" / ");
 
 // 報告を開く。動作一覧が空の報告は作れない(A3: 実行なき完了報告を型で防ぐ)。
 // reportId は repoKey + 作業名から計算(D3: 乱数禁止)。同じ作業名の再呼び出しはべき等。
@@ -36,8 +39,19 @@ export function openReport(args: OpenReportArgs): Reply<Report> {
       "各行に「動くと言っている動作(文)」と「使う確かめ方」を書いてください",
     );
   }
+  // 確かめ方は語彙から選ぶ(自由文字列は判定で下限と比較できない)
+  const unknownCheck = args.behaviors.findIndex((b) => !(CHECK_KINDS as readonly string[]).includes(b.check.trim()));
+  if (unknownCheck !== -1) {
+    return reject(
+      `動作一覧の ${unknownCheck + 1} 行目の確かめ方「${args.behaviors[unknownCheck].check}」が語彙にない`,
+      `確かめ方は次から選んでください: ${CHECK_VOCABULARY}`,
+    );
+  }
 
-  const behaviors = args.behaviors.map((b) => ({ behavior: b.behavior.trim(), check: b.check.trim() }));
+  const behaviors: BehaviorEntry[] = args.behaviors.map((b) => ({
+    behavior: b.behavior.trim(),
+    check: b.check.trim() as CheckKind,
+  }));
   const repoKey = basename(gateDir);
   const reportId = createHash("sha256").update(`${repoKey}\0${title}`).digest("hex").slice(0, 12);
   const recordPath = join(gateDir, "reports", `${reportId}.json`);

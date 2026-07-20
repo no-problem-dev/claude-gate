@@ -44,6 +44,8 @@ function covers(check: CheckKind, e: Evidence): boolean {
       return e.kind === "video";
     case "launch_check":
       return e.kind === "screenshot" || e.kind === "video";
+    case "device_report":
+      return e.kind === "device_report"; // 実機セルフレポートは実機レポートでのみ覆える
     case "human_check":
       return false; // 機械の証拠では覆えない(人間に渡すための確かめ方)
   }

@@ -4,6 +4,7 @@ import { appendEvent } from "../../kernel/audit.js";
 import { readJson, repoDirOf, writeJson } from "../../kernel/store.js";
 import { buildIdOf, shortBuildId } from "../build_id.js";
 import { gitDirty, gitSha } from "../git.js";
+import { machoUuidsOf } from "../macho_uuid.js";
 import type { Build, Reply } from "../words.js";
 
 export interface RegisterBuildArgs {
@@ -13,7 +14,13 @@ export interface RegisterBuildArgs {
   configuration?: string;
 }
 
-export function registerBuild(args: RegisterBuildArgs): Reply<Build> {
+export interface RegisterBuildDeps {
+  machoUuidsOf: (appPath: string) => string[];
+}
+
+const defaultDeps: RegisterBuildDeps = { machoUuidsOf };
+
+export function registerBuild(args: RegisterBuildArgs, deps: RegisterBuildDeps = defaultDeps): Reply<Build> {
   const gateDir = repoDirOf(args.worksitePath);
 
   if (!existsSync(args.appPath) || !statSync(args.appPath).isDirectory() || !args.appPath.endsWith(".app")) {
@@ -48,6 +55,7 @@ export function registerBuild(args: RegisterBuildArgs): Reply<Build> {
     appPath: args.appPath,
     gitSha: gitSha(args.worksitePath),
     dirty: gitDirty(args.worksitePath),
+    machoUuids: deps.machoUuidsOf(args.appPath),
     scheme: args.scheme,
     configuration: args.configuration,
     registeredAt: new Date().toISOString(),

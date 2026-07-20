@@ -45,7 +45,11 @@ function checkRunEvidence(
 }
 
 function cleanBuild(buildId: string, gitSha: string | null = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"): Build {
-  return { buildId, buildIdFull: buildId.repeat(2), appPath: "/x/App.app", gitSha, dirty: false, registeredAt: "t" };
+  return { buildId, buildIdFull: buildId.repeat(2), appPath: "/x/App.app", gitSha, dirty: false, machoUuids: [], registeredAt: "t" };
+}
+
+function deviceReportEvidence(id: string, buildId: string): Evidence {
+  return { evidenceId: id, kind: "device_report", storedFile: `/x/${id}.log`, attachedAt: "t", buildId };
 }
 
 function input(partial: Partial<JudgeInput> & Pick<JudgeInput, "report">): JudgeInput {
@@ -147,6 +151,33 @@ describe("judgeReport — ゴールデン", () => {
     const result = judgeReport(input({ report, evidenceById: { e1: video }, buildsById: { b1: cleanBuild("b1") } }));
     expect(result.verdict).toBe("unconfirmed");
     expect(result.behaviors[0].reason).toContain("人間");
+  });
+
+  it("実機レポート(device_report)で覆われた system の動作は 合格(実機 E2E を同格に扱う)", () => {
+    const report = makeReport(
+      [{ behavior: "keychain のログインが実機で復元される", change_kind: "system", check: "device_report" }],
+      [{ evidenceId: "e1", behaviorIndex: 1 }],
+    );
+    report.buildIds = ["b1"];
+    const result = judgeReport(
+      input({
+        report,
+        evidenceById: { e1: deviceReportEvidence("e1", "b1") },
+        buildsById: { b1: cleanBuild("b1") },
+      }),
+    );
+    expect(result.verdict).toBe("passed");
+    expect(result.sourceSha).toBe("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+  });
+
+  it("device_report を宣言したのにスクショしか無いと 不合格(実機レポートでのみ覆える)", () => {
+    const report = makeReport(
+      [{ behavior: "課金が実機で通る", change_kind: "system", check: "device_report" }],
+      [{ evidenceId: "e1", behaviorIndex: 1 }],
+    );
+    const result = judgeReport(input({ report, evidenceById: { e1: screenshotEvidence("e1", "b1") } }));
+    expect(result.verdict).toBe("failed");
+    expect(result.behaviors[0].reason).toContain("覆われていない");
   });
 
   it("旧形式(変更の種類なし)は 確認できず", () => {

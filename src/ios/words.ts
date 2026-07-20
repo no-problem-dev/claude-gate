@@ -2,8 +2,10 @@
 
 export type Verdict = "ok" | "ng" | "unconfirmed";
 
-// 証拠の種類。check_run(確かめの記録)はゲート自身がコマンドを実行した結果(2b)
-export type EvidenceKind = "screenshot" | "ui_snapshot" | "video" | "check_run";
+// 証拠の種類。check_run(確かめの記録)はゲート自身がコマンドを実行した結果(2b)。
+// device_report(実機レポート)は実機で走ったアプリ自身のセルフレポート(console 出力等) —
+// 実機からは .app を取り出せないので、出所照合はビルドの中身ハッシュではなく Mach-O UUID で行う
+export type EvidenceKind = "screenshot" | "ui_snapshot" | "video" | "check_run" | "device_report";
 
 // ビルド: 検証対象の成果物。buildId は成果物の中身から計算する(git の commit ID と同じ仕組み)
 // 記録は最初の登録時の事実で固定される(不変)。再登録時は応答の note で既登録を明示する
@@ -13,24 +15,26 @@ export interface Build {
   appPath: string;
   gitSha: string | null;
   dirty: boolean;
+  machoUuids: string[]; // 実行バイナリの Mach-O UUID(LC_UUID・arch ごと)。実機レポートの出所照合に使う
   scheme?: string;
   configuration?: string;
   registeredAt: string;
 }
 
 // 証拠: 1件の観測記録。出所を持つ。
-// シミュレータ観測(screenshot / ui_snapshot / video)の出所は「どのビルドを見たか」、
-// 確かめの記録(check_run)の出所は「どのソース(gitSha / dirty)でコマンドを実行したか」
+// シミュレータ観測(screenshot / ui_snapshot / video)・実機レポート(device_report)の出所は
+// 「どのビルドを見たか」、確かめの記録(check_run)の出所は「どのソースでコマンドを実行したか」
 export interface Evidence {
   evidenceId: string; // 中身から決まる(べき等)
   kind: EvidenceKind;
   storedFile: string; // 不変コピー(check_run は出力ログ)の場所
   note?: string;
   attachedAt: string;
-  // シミュレータ観測のみ
+  // シミュレータ観測・実機レポートのみ
   buildId?: string;
   sourceFile?: string; // 観測ファイルの元の場所
   simulatorUdid?: string;
+  deviceUdid?: string; // 実機レポート(device_report)のみ
   bundleId?: string;
   // 確かめの記録(check_run)のみ
   check?: CheckKind;
@@ -53,6 +57,7 @@ export const CHECK_KINDS = [
   "ui_test", // UIテスト(XCUITest)
   "video", // 録画
   "launch_check", // 起動確認
+  "device_report", // 実機レポート(実機で走ったアプリ自身のセルフレポート)
   "human_check", // 人間確認
 ] as const;
 export type CheckKind = (typeof CHECK_KINDS)[number];
@@ -65,6 +70,7 @@ export const CHECK_LABEL: Record<CheckKind, string> = {
   ui_test: "UIテスト",
   video: "録画",
   launch_check: "起動確認",
+  device_report: "実機レポート",
   human_check: "人間確認",
 };
 

@@ -37,6 +37,14 @@ claude plugin install claude-gate@taniguchi-kyoichi
 
 これで全ディレクトリ・全セッションで gate ツールと gate-loop スキルが使える。プロジェクト側に置くファイルはゼロ。ゲート運用にするリポジトリだけ、ルートに宣言ファイル `gate.yaml`(env / worksite / checks / passline / cannot_see。全セクション任意)を置く。
 
+**新しいリポジトリに導入するとき**は、そのリポジトリのルートで一発:
+
+```bash
+claude-gate init    # gate.yaml の雛形を作る(既存なら上書きしない)
+```
+
+生成された `checks` のスキーム名・コマンドをリポジトリに合わせて編集し、git に載せる。全セクション任意なので、消せば同梱デフォルトだけで動く。
+
 ## 日常の運用
 
 **PC 再起動後は何もしなくてよい**(launchd がログイン時に自動起動)。調子が悪いときだけ:

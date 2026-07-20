@@ -39,6 +39,7 @@ export interface Build {
   appPath: string;
   gitSha: string | null;
   dirty: boolean;
+  machoUuids?: string[];
   scheme?: string;
   configuration?: string;
   registeredAt: string;
@@ -46,14 +47,15 @@ export interface Build {
 
 export interface Evidence {
   evidenceId: string;
-  kind: "screenshot" | "ui_snapshot" | "video" | "check_run";
+  kind: "screenshot" | "ui_snapshot" | "video" | "check_run" | "device_report";
   storedFile: string;
   note?: string;
   attachedAt: string;
-  // シミュレータ観測のみ
+  // シミュレータ観測・実機レポートのみ
   buildId?: string;
   sourceFile?: string;
   simulatorUdid?: string;
+  deviceUdid?: string;
   bundleId?: string;
   // 確かめの記録(check_run)のみ
   check?: string;
@@ -131,6 +133,7 @@ export const CHECK_LABEL: Record<string, string> = {
   ui_test: "UIテスト",
   video: "録画",
   launch_check: "起動確認",
+  device_report: "実機レポート",
   human_check: "人間確認",
 };
 
@@ -216,18 +219,23 @@ export const KIND_LABEL: Record<Evidence["kind"], string> = {
   ui_snapshot: "UI スナップショット",
   video: "録画",
   check_run: "確かめの記録",
+  device_report: "実機レポート",
 };
 
 export function evidenceIcon(kind: Evidence["kind"]): string {
-  return kind === "video" ? "🎞" : kind === "check_run" ? "🧪" : "🧩";
+  return kind === "video" ? "🎞" : kind === "check_run" ? "🧪" : kind === "device_report" ? "📱" : "🧩";
 }
 
-// 証拠の一言表示: シミュレータ観測は note、確かめの記録は何をどう実行した結果か
+// 証拠の一言表示: シミュレータ観測は note、確かめの記録は何をどう実行した結果か、
+// 実機レポートは実機で走ったアプリのセルフレポート
 export function evidenceCaption(item: Evidence): string {
   if (item.kind === "check_run") {
     const label = item.check !== undefined ? (CHECK_LABEL[item.check] ?? item.check) : "確かめ";
     const outcome = item.exitCode === 0 ? "終了コード 0" : `終了コード ${item.exitCode}(赤)`;
     return item.note ?? `${label}をゲートが実行 — ${outcome}`;
+  }
+  if (item.kind === "device_report") {
+    return item.note ?? "実機で走ったアプリのセルフレポート(Mach-O UUID 照合済み)";
   }
   return item.note ?? "(note なし)";
 }

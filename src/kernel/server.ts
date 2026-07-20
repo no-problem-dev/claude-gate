@@ -67,7 +67,7 @@ function newServer(): McpServer {
               check: z
                 .enum(CHECK_KINDS)
                 .describe(
-                  "使う確かめ方(語彙固定): compile=コンパイル / unit_test=ユニットテスト / screenshot=スクショ / interaction_log=操作記録 / ui_test=UIテスト / video=録画 / launch_check=起動確認 / human_check=人間確認。変更の種類ごとに使える確かめ方が決まっている(下回ると拒否)",
+                  "使う確かめ方(語彙固定): compile=コンパイル / unit_test=ユニットテスト / screenshot=スクショ / interaction_log=操作記録 / ui_test=UIテスト / video=録画 / launch_check=起動確認 / device_report=実機レポート(実機で走ったアプリのセルフレポート。keychain 復元・課金・通知配信・上書き更新 E2E 等 実機でしか確認できない動作) / human_check=人間確認。変更の種類ごとに使える確かめ方が決まっている(下回ると拒否)",
                 ),
             }),
           )
@@ -96,13 +96,18 @@ function newServer(): McpServer {
     "attach_evidence",
     {
       description:
-        "証拠を付ける。受理前にシミュレータ内の実物からビルドID を計算し直し、登録済みの ID と照合する。別のビルドなら受け取らない",
+        "証拠を付ける。シミュレータ観測(screenshot / ui_snapshot / video)は受理前にシミュレータ内の実物からビルドID を計算し直して照合する。実機レポート(device_report)は実機から .app を取れないので、レポート本文の buildUUID を登録ビルドの Mach-O UUID と照合する。別のビルドなら受け取らない",
       inputSchema: {
         worksitePath: z.string().describe("作業場(worktree)のパス"),
         buildId: z.string().describe("register_build が返したビルドID"),
-        kind: z.enum(["screenshot", "ui_snapshot", "video"]),
-        file: z.string().describe("観測ファイル(スクショ・録画)のパス"),
-        simulatorUdid: z.string(),
+        kind: z
+          .enum(["screenshot", "ui_snapshot", "video", "device_report"])
+          .describe(
+            "証拠の種類。device_report=実機で走ったアプリのセルフレポート(buildUUID= 行を含む console 出力等)。それ以外はシミュレータ観測",
+          ),
+        file: z.string().describe("観測ファイル(スクショ・録画・実機レポートのテキスト)のパス"),
+        simulatorUdid: z.string().optional().describe("シミュレータ観測で必須(観測したシミュレータの UDID)"),
+        deviceUdid: z.string().optional().describe("device_report で必須(レポートを回収した実機の UDID)"),
         bundleId: z.string(),
         note: z.string().optional().describe("何を観測したか"),
         reportId: z.string().optional().describe("紐づける報告(open_report が返した reportId。behaviorIndex とセット)"),

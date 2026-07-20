@@ -5,16 +5,18 @@ import type { CannotSeeEntry, Passline } from "./words.js";
 
 // 合格ライン: 変更の種類 → 使ってよい確かめ方(ios-task-loop.md §3 対応表の機械化)。
 // gate.yaml の passline は「書いた種類だけ」この表を置き換える
+// device_report(実機レポート)は実機 E2E の強い証拠。挙動・状態の変更(pixel でない種類)では
+// 常に下限以上として使える。見た目・動きの合否は実機ログに写らないので appearance / motion には入れない
 export const DEFAULT_PASSLINE: Passline = {
-  logic: ["unit_test", "ui_test"],
+  logic: ["unit_test", "ui_test", "device_report"],
   appearance: ["screenshot", "interaction_log", "ui_test", "video"],
   // 操作の動作を静的スクショで覆う言い換えが実際に起きた(ドッグフード #12)ため screenshot は不可
-  interaction: ["interaction_log", "ui_test", "video"],
+  interaction: ["interaction_log", "ui_test", "video", "device_report"],
   motion: ["video", "human_check"],
-  data: ["unit_test", "ui_test"],
-  contract: ["compile", "unit_test", "ui_test"],
-  config: ["launch_check", "interaction_log", "ui_test", "video"],
-  system: ["interaction_log", "ui_test", "video", "human_check"],
+  data: ["unit_test", "ui_test", "device_report"],
+  contract: ["compile", "unit_test", "ui_test", "device_report"],
+  config: ["launch_check", "interaction_log", "ui_test", "video", "device_report"],
+  system: ["interaction_log", "ui_test", "video", "device_report", "human_check"],
 };
 
 // 見えないこと台帳: 記憶(reference_*)をデータ化し、判定時に機械参照する(A2 / A5)

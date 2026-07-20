@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { initGateYaml } from "./ios/gate_init.js";
 import { forgetBuild, forgetEvidence, forgetRepo, forgetReport, resolveRepoKey } from "./kernel/forget.js";
 import { gateHome } from "./kernel/store.js";
 
@@ -23,11 +24,26 @@ switch (command) {
   case "doctor":
     await doctor();
     break;
+  case "init":
+    init();
+    break;
   case "forget":
     forget(process.argv.slice(3));
     break;
   default:
     help();
+}
+
+// 新規リポジトリへの導入(カレントディレクトリに gate.yaml の雛形を作る。既存は上書きしない)
+function init(): void {
+  const outcome = initGateYaml(process.cwd());
+  if (outcome.status === "created") {
+    console.log(`✓ gate.yaml を作成しました: ${outcome.path}`);
+    console.log("  checks のスキーム名・コマンドをこのリポジトリに合わせて編集し、git に載せてください");
+    console.log("  (全セクション任意。消せば同梱デフォルトで動きます)");
+  } else {
+    console.log(`○ gate.yaml は既にあります(上書きしません): ${outcome.path}`);
+  }
 }
 
 // 掃除(人間の操作。エージェントには MCP ツールとして公開しない)
@@ -183,6 +199,7 @@ function help(): void {
   serve    サーバをこのプロセスで起動する(開発用)
   install  launchd に常駐させる(べき等)
   doctor   稼働状態を点検する(デーモン/ダッシュボード/プラグイン)
+  init     カレントリポジトリに gate.yaml の雛形を作る(既存は上書きしない)
   forget   掃除(人間の操作): リポジトリの状態 / --build / --report / --evidence を削除
            参照されている記録は消せない。レコード単位の削除は監査ログに残る`);
 }

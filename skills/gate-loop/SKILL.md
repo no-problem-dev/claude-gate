@@ -51,7 +51,9 @@ open_report(
 `logic`(ロジック)/ `appearance`(見た目)/ `interaction`(操作・遷移)/ `motion`(動き)/ `data`(データ)/ `contract`(契約)/ `config`(設定)/ `system`(連携)
 
 確かめ方の語彙(これ以外は拒否される):
-`compile`(コンパイル)/ `unit_test`(ユニットテスト)/ `screenshot`(スクショ)/ `interaction_log`(操作記録)/ `ui_test`(UIテスト)/ `video`(録画)/ `launch_check`(起動確認)/ `human_check`(人間確認)
+`compile`(コンパイル)/ `unit_test`(ユニットテスト)/ `screenshot`(スクショ)/ `interaction_log`(操作記録)/ `ui_test`(UIテスト)/ `video`(録画)/ `launch_check`(起動確認)/ `device_report`(実機レポート)/ `human_check`(人間確認)
+
+`device_report` は、**実機でしか検証できない動作**(keychain 復元・StoreKit 課金・プッシュ通知配信・上書きアップデート E2E 等)のための確かめ方。実機で走ったアプリ自身が状態を print したセルフレポートを証拠にする(手順 3c)。シミュレータでは成立しない検証(見えないこと台帳に載っている課金・通知等)も、実機のセルフレポートなら覆える。
 
 - **動作一覧が空の報告は開けない**(証拠なしの「できました」を型で防ぐ)
 - **確かめ方には下限がある**: 変更の種類ごとに使ってよい確かめ方が決まっていて(例: 操作・遷移に静的スクショは不可)、下回る計画は開けない。拒否の fix に使える確かめ方が列挙される。下限を下げる例外は人間が gate.yaml の `passline` を変更する(git に記録が残る)— エージェントが勝手に変更しない
@@ -101,6 +103,52 @@ attach_evidence(
 reportId と behaviorIndex は**セットで**付ける(どの動作の証拠かを宣言する)。報告に属さない一時的な観測なら両方省略できるが、作業の証拠は原則すべて報告に紐づける。
 
 ゲートはシミュレータ内の実物アプリからビルドID を計算し直し、登録した ID と照合してから受理する。
+
+### 3c. 実機でしか確かめられない動作は実機レポートで証拠にする
+
+keychain 復元・StoreKit 課金・プッシュ通知配信・上書きアップデートの E2E は、シミュレータでは成立しない。実機に入れたアプリ自身に状態を print させ、その console 出力を証拠にする(`check: device_report` で宣言した動作向け):
+
+1. **アプリに自己報告を仕込む**: 起動時などに、自分の Mach-O UUID と検証したい状態を print する。UUID は出所照合に使うので**必ず** `buildUUID=<uuid>` の形で出す:
+
+   ```swift
+   import MachO
+   func currentBuildUUID() -> String? {
+       guard let header = _dyld_get_image_header(0) else { return nil }  // image 0 = 実行バイナリ本体
+       return header.withMemoryRebound(to: mach_header_64.self, capacity: 1) { mh in
+           var cursor = UnsafeRawPointer(mh).advanced(by: MemoryLayout<mach_header_64>.size)
+           for _ in 0..<mh.pointee.ncmds {
+               let cmd = cursor.assumingMemoryBound(to: load_command.self)
+               if cmd.pointee.cmd == LC_UUID {
+                   return UUID(uuid: cursor.assumingMemoryBound(to: uuid_command.self).pointee.uuid).uuidString
+               }
+               cursor = cursor.advanced(by: Int(cmd.pointee.cmdsize))
+           }
+           return nil
+       }
+   }
+   print("buildUUID=\(currentBuildUUID() ?? "unknown")")
+   // 続けて検証したい状態も print(例: print("[SPIKE] keychain restored: \(restored)"))
+   ```
+
+2. **実機に入れたのと同じ .app を register_build する**(ゲートが実行バイナリの LC_UUID を記録する。ここで登録した .app と実機に install した .app が同じであること)
+3. **実機でアプリを起動し、console を回収する**(`xcrun devicectl device process launch --console` 等)。回収したテキストをファイルに保存する
+4. **device_report として添付する**:
+
+   ```
+   attach_evidence(
+     worksitePath: <同上>,
+     buildId: <手順2の buildId>,
+     kind: "device_report",
+     file: <回収した console テキストのパス>,
+     deviceUdid: <実機の UDID>,
+     bundleId: <対象アプリの bundle ID>,
+     note: <何を実機で確かめたか>,
+     reportId: <reportId>,
+     behaviorIndex: <動作の番号>
+   )
+   ```
+
+ゲートはレポート本文の `buildUUID=` 行を、登録ビルドの Mach-O UUID と照合してから受理する(実機からは .app を取れないので、中身ハッシュではなく UUID で「同じビルドか」を確かめる)。`buildUUID=` 行が無い・別ビルドの UUID なら拒否される。
 
 ### 3b. テスト系の確かめはゲートに実行させる
 

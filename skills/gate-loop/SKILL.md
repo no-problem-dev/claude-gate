@@ -108,25 +108,24 @@ reportId と behaviorIndex は**セットで**付ける(どの動作の証拠か
 
 keychain 復元・StoreKit 課金・プッシュ通知配信・上書きアップデートの E2E は、シミュレータでは成立しない。実機に入れたアプリ自身に状態を print させ、その console 出力を証拠にする(`check: device_report` で宣言した動作向け):
 
-1. **アプリに自己報告を仕込む**: 起動時などに、自分の Mach-O UUID と検証したい状態を print する。UUID は出所照合に使うので**必ず** `buildUUID=<uuid>` の形で出す:
+1. **アプリに自己報告を仕込む**: 起動時などに、自分の Mach-O UUID と検証したい状態を print する。UUID は出所照合に使うので**必ず** `buildUUID=<uuid>` の形で出す。`#dsohandle` を使うのが要点 — Xcode 16+ の Debug ビルドは実コードを `<App>.debug.dylib` に置き、メイン実行ファイルはビルド間で不変のスタブになる。`#dsohandle` は「このコードが載っている image」(Debug では `.debug.dylib`)を指すので、ビルドごとに変わる実コードの UUID を報告できる(`_dyld_get_image_header(0)` でメイン実行ファイルを見ると、内容の違うビルドが同じ UUID になり古いビルドを受理してしまう):
 
    ```swift
    import MachO
-   func currentBuildUUID() -> String? {
-       guard let header = _dyld_get_image_header(0) else { return nil }  // image 0 = 実行バイナリ本体
-       return header.withMemoryRebound(to: mach_header_64.self, capacity: 1) { mh in
-           var cursor = UnsafeRawPointer(mh).advanced(by: MemoryLayout<mach_header_64>.size)
-           for _ in 0..<mh.pointee.ncmds {
-               let cmd = cursor.assumingMemoryBound(to: load_command.self)
-               if cmd.pointee.cmd == LC_UUID {
-                   return UUID(uuid: cursor.assumingMemoryBound(to: uuid_command.self).pointee.uuid).uuidString
-               }
-               cursor = cursor.advanced(by: Int(cmd.pointee.cmdsize))
+   // dso 既定引数の #dsohandle は呼び出し元(アプリのコード)が載っている image を指す
+   func currentBuildUUID(dso: UnsafeRawPointer = #dsohandle) -> String {
+       let header = dso.assumingMemoryBound(to: mach_header_64.self)
+       var cursor = UnsafeRawPointer(header).advanced(by: MemoryLayout<mach_header_64>.size)
+       for _ in 0..<header.pointee.ncmds {
+           let cmd = cursor.assumingMemoryBound(to: load_command.self)
+           if cmd.pointee.cmd == LC_UUID {
+               return UUID(uuid: cursor.assumingMemoryBound(to: uuid_command.self).pointee.uuid).uuidString
            }
-           return nil
+           cursor = cursor.advanced(by: Int(cmd.pointee.cmdsize))
        }
+       return "unknown"
    }
-   print("buildUUID=\(currentBuildUUID() ?? "unknown")")
+   print("buildUUID=\(currentBuildUUID())")
    // 続けて検証したい状態も print(例: print("[SPIKE] keychain restored: \(restored)"))
    ```
 

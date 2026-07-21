@@ -1,6 +1,8 @@
 // ガイドの図解(docs/dashboard-design.md §5)。
 // 自前 SVG・外部ライブラリなし・ライト/ダーク追従。ラベルは対訳表の日本語、識別子は小さく併記。
 
+import { REPORT_STATE_LABEL } from "../../src/ios/words";
+
 const box = "fill-black/4 stroke-black/15 dark:fill-white/6 dark:stroke-white/15";
 const boxGood = "fill-green-600/12 stroke-green-600/40";
 const boxBad = "fill-red-600/12 stroke-red-600/40";
@@ -140,26 +142,26 @@ export function ReportStateDiagram() {
   return (
     <svg viewBox="0 0 760 232" className="h-auto w-full text-zinc-800 dark:text-zinc-100" role="img" aria-label="完了報告の状態遷移図: 下書きから証拠ありへ、判定で合格・不合格・確認できずに分かれ、合格だけが提出済みに進む。確認できずは人間に渡す">
       <Arrow id="st" />
-      <Box x={8} y={92} w={92} label="下書き" />
+      <Box x={8} y={92} w={92} label={REPORT_STATE_LABEL.draft} />
       <line x1={100} y1={112} x2={172} y2={112} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
       <text x={136} y={102} textAnchor="middle" fontSize="10" className={inkSub}>証拠を付ける</text>
-      <Box x={176} y={92} w={104} label="証拠あり" />
+      <Box x={176} y={92} w={104} label={REPORT_STATE_LABEL.evidenced} />
 
       <line x1={280} y1={104} x2={356} y2={44} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
       <line x1={280} y1={112} x2={356} y2={112} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
       <line x1={280} y1={120} x2={356} y2={182} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
       <text x={318} y={92} textAnchor="middle" fontSize="10" className={inkSub}>判定</text>
 
-      <Box x={360} y={22} w={104} label="合格" tone="good" />
+      <Box x={360} y={22} w={104} label={REPORT_STATE_LABEL.passed} tone="good" />
       <line x1={464} y1={42} x2={548} y2={42} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
       <text x={506} y={32} textAnchor="middle" fontSize="10" className={inkSub}>提出する</text>
-      <Box x={552} y={22} w={120} h={44} label="提出済み" sub="PR レビュー依頼済み" />
+      <Box x={552} y={22} w={120} h={44} label={REPORT_STATE_LABEL.submitted} sub="PR レビュー依頼済み" />
 
-      <Box x={360} y={92} w={104} label="不合格" tone="bad" />
+      <Box x={360} y={92} w={104} label={REPORT_STATE_LABEL.failed} tone="bad" />
       <path d="M 412 132 L 412 158 L 228 158 L 228 132" fill="none" strokeWidth="1.3" strokeDasharray="4 3" className={line} markerEnd="url(#st)" />
       <text x={320} y={152} textAnchor="middle" fontSize="10" className={inkSub}>直して証拠を集め直す</text>
 
-      <Box x={360} y={180} w={120} label="確認できず" tone="warn" />
+      <Box x={360} y={180} w={120} label={REPORT_STATE_LABEL.unconfirmed} tone="warn" />
       <line x1={480} y1={200} x2={548} y2={200} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
       <Box x={552} y={180} w={120} label="人間に渡す" />
     </svg>

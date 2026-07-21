@@ -1,11 +1,27 @@
 // 語彙の定義: 日本語の正式名と英語識別子の 1:1 対訳。ここにない語は実装に登場させない。
+// ダッシュボードもこのファイルを直接 import する(ラベルの写しを UI 側に持たない)。
 
 export type Verdict = "ok" | "ng" | "unconfirmed";
+
+// 動作の判定の正式名。OK・NG は日本語の日常語として正式採用(層の違う報告の判定 合格/不合格 と混ぜない)
+export const VERDICT_LABEL: Record<Verdict, string> = {
+  ok: "OK",
+  ng: "NG",
+  unconfirmed: "確認できず",
+};
 
 // 証拠の種類。check_run(確かめの記録)はゲート自身がコマンドを実行した結果(2b)。
 // device_report(実機レポート)は実機で走ったアプリ自身のセルフレポート(console 出力等) —
 // 実機からは .app を取り出せないので、出所照合はビルドの中身ハッシュではなく Mach-O UUID で行う
 export type EvidenceKind = "screenshot" | "ui_snapshot" | "video" | "check_run" | "device_report";
+
+export const EVIDENCE_KIND_LABEL: Record<EvidenceKind, string> = {
+  screenshot: "スクリーンショット",
+  ui_snapshot: "UI スナップショット",
+  video: "録画",
+  check_run: "確かめの記録",
+  device_report: "実機レポート",
+};
 
 // ビルド: 検証対象の成果物。buildId は成果物の中身から計算する(git の commit ID と同じ仕組み)
 // 記録は最初の登録時の事実で固定される(不変)。再登録時は応答の note で既登録を明示する
@@ -46,6 +62,38 @@ export interface Evidence {
 
 // 完了報告の状態(ドメインモデル §3.2)。提出済み(submitted)が終着
 export type ReportState = "draft" | "evidenced" | "passed" | "failed" | "unconfirmed" | "submitted";
+
+export const REPORT_STATE_LABEL: Record<ReportState, string> = {
+  draft: "下書き",
+  evidenced: "証拠あり",
+  passed: "合格",
+  failed: "不合格",
+  unconfirmed: "確認できず",
+  submitted: "提出済み",
+};
+
+// 報告のグループ: 状態からの導出(読み取りモデルで計算し、保存しない)。
+// 「今、誰の番か」を表す — 人間確認待ち(人間)/ 提出待ち・進行中(エージェント)/ 終着(誰の番でもない)
+export type ReportGroup = "awaiting_human" | "awaiting_submit" | "active" | "terminal";
+
+export const REPORT_GROUP_LABEL: Record<ReportGroup, string> = {
+  awaiting_human: "人間確認待ち",
+  awaiting_submit: "提出待ち",
+  active: "進行中",
+  terminal: "終着",
+};
+
+export function reportGroup(state: ReportState): ReportGroup {
+  if (state === "submitted") return "terminal";
+  if (state === "unconfirmed") return "awaiting_human";
+  if (state === "passed") return "awaiting_submit";
+  return "active"; // 下書き・証拠あり・不合格 = 作業の続き
+}
+
+// 未解決(unresolved): 拒否のできごとに、その後の解消が無い状態。
+// 解消 = 同じ報告のその後の成功(どのツールでも)・報告の掃除、報告に紐づかない拒否は同じツールのその後の成功。
+// 導出の本体は kernel/attention.ts(純関数)。記録は不変、注意は毎回計算する
+export const UNRESOLVED_REJECTION_LABEL = "未解決の拒否";
 
 // 確かめ方の語彙(ios-task-loop.md §3 対応表と 1:1)。
 // 自由文字列だと判定(2b)で下限と比較できない — 語彙外の確かめ方は宣言に使えない

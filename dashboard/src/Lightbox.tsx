@@ -2,10 +2,10 @@ import { Button } from "@heroui/react";
 import { useEffect, useState } from "react";
 import {
   Build,
-  CHECK_LABEL,
+  EVIDENCE_KIND_LABEL,
   Evidence,
-  KIND_LABEL,
   buildTitle,
+  checkLabel,
   evidenceCaption,
   evidenceIcon,
   formatTimeFull,
@@ -76,7 +76,7 @@ export function Lightbox({
         <aside className="overflow-y-auto p-5">
           <div className="flex flex-wrap items-center gap-2 pr-8">
             <AcceptBadge />
-            <NeutralChip>{KIND_LABEL[evidence.kind]}</NeutralChip>
+            <NeutralChip>{EVIDENCE_KIND_LABEL[evidence.kind]}</NeutralChip>
           </div>
           <p className="mt-2.5 text-[13px]">{evidenceCaption(evidence)}</p>
 
@@ -94,7 +94,7 @@ export function Lightbox({
             <Meta label="受理">{formatTimeFull(evidence.attachedAt)}</Meta>
             {evidence.kind === "check_run" ? (
               <>
-                <Meta label="確かめ方">{evidence.check !== undefined ? (CHECK_LABEL[evidence.check] ?? evidence.check) : "—"}</Meta>
+                <Meta label="確かめ方">{evidence.check !== undefined ? checkLabel(evidence.check) : "—"}</Meta>
                 <Meta label="コマンド">
                   <span className="font-mono text-xs">{evidence.command}</span>
                 </Meta>
@@ -166,7 +166,7 @@ function CheckRunLog({ url, exitCode, check }: { url: string; exitCode?: number;
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-2.5">
         <span aria-hidden>🧪</span>
         <span className="text-xs font-semibold text-zinc-200">
-          {check !== undefined ? (CHECK_LABEL[check] ?? check) : "確かめ"}の出力ログ
+          {check !== undefined ? checkLabel(check) : "確かめ"}の出力ログ
         </span>
         <ExitCodeChip exitCode={exitCode} />
         <a

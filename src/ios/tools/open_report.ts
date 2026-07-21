@@ -73,9 +73,10 @@ export function openReport(args: OpenReportArgs): Reply<Report> {
   );
   if (below !== -1) {
     const kind = args.behaviors[below].change_kind.trim() as ChangeKind;
+    const check = args.behaviors[below].check.trim() as CheckKind;
     const allowed = passline[kind].map((c) => `${c}(${CHECK_LABEL[c]})`).join(" / ");
     return reject(
-      `動作一覧の ${below + 1} 行目: 確かめ方「${args.behaviors[below].check}」は変更の種類「${CHANGE_KIND_LABEL[kind]}」の合格ラインを下回る`,
+      `動作一覧の ${below + 1} 行目: 確かめ方「${CHECK_LABEL[check]}(${check})」は変更の種類「${CHANGE_KIND_LABEL[kind]}」の合格ラインを下回る`,
       `「${CHANGE_KIND_LABEL[kind]}」に使える確かめ方: ${allowed}。下限を下げる例外は人間が gate.yaml の passline を変更する(git に記録が残る)`,
     );
   }

@@ -1,14 +1,15 @@
 import { Card, Chip } from "@heroui/react";
 import { useEffect, useMemo, useRef } from "react";
 import {
-  CHANGE_KIND_LABEL,
-  CHECK_LABEL,
   Evidence,
   REPORT_STATE_COLOR,
   REPORT_STATE_LABEL,
   Report,
   RepoDetail,
+  VERDICT_LABEL,
   buildTitle,
+  changeKindLabel,
+  checkLabel,
   formatTime,
 } from "./lib";
 import { EvidenceThumb, SectionTitle } from "./BuildsTab";
@@ -167,18 +168,18 @@ function ReportCard({
                 <span className="min-w-0 flex-1 text-[13.5px] font-medium">{entry.behavior}</span>
                 {entry.change_kind !== undefined && (
                   <Chip color="default" size="sm" title="変更の種類">
-                    {CHANGE_KIND_LABEL[entry.change_kind] ?? entry.change_kind}
+                    {changeKindLabel(entry.change_kind)}
                   </Chip>
                 )}
                 <Chip color="default" size="sm" title="宣言した確かめ方">
-                  {CHECK_LABEL[entry.check] ?? entry.check}
+                  {checkLabel(entry.check)}
                 </Chip>
                 {verdict !== undefined ? (
                   <Chip
                     color={verdict.verdict === "ok" ? "success" : verdict.verdict === "ng" ? "danger" : "warning"}
                     size="sm"
                   >
-                    {verdict.verdict === "ok" ? "✓ OK" : verdict.verdict === "ng" ? "✕ NG" : "? 確認できず"}
+                    {verdict.verdict === "ok" ? "✓" : verdict.verdict === "ng" ? "✕" : "?"} {VERDICT_LABEL[verdict.verdict]}
                   </Chip>
                 ) : evidence.length > 0 ? (
                   <Chip color="success" size="sm">

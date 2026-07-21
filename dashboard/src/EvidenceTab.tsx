@@ -1,5 +1,5 @@
 import { Card } from "@heroui/react";
-import { KIND_LABEL, RepoDetail, buildTitle, evidenceCaption, evidenceIcon } from "./lib";
+import { EVIDENCE_KIND_LABEL, RepoDetail, buildTitle, evidenceCaption, evidenceIcon } from "./lib";
 import { AcceptBadge, BuildDot, CheckRunGlance, EvidenceVideo, NeutralChip, Time } from "./components";
 
 // 証拠タブ: ビルド横断のギャラリー。証拠の顔はスクショ実物と note(何が写っているか)
@@ -50,7 +50,7 @@ export function EvidenceTab({
             <div className="px-3.5 py-3">
               <div className="flex flex-wrap items-center gap-2">
                 <AcceptBadge />
-                <NeutralChip>{KIND_LABEL[item.kind]}</NeutralChip>
+                <NeutralChip>{EVIDENCE_KIND_LABEL[item.kind]}</NeutralChip>
                 <Time iso={item.attachedAt} className="ml-auto" />
               </div>
               <p className="mt-2 mb-1.5 text-[13px]">{evidenceCaption(item)}</p>

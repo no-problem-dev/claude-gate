@@ -1,6 +1,6 @@
 import { Chip } from "@heroui/react";
 import { CSSProperties, useEffect, useRef } from "react";
-import { CHECK_LABEL, Evidence, buildHue, humanTime } from "./lib";
+import { Evidence, buildHue, checkLabel, humanTime } from "./lib";
 
 // 録画証拠のインライン再生。autoplay はブラウザポリシー上 muted とセットでのみ許される。
 // React は muted を DOM プロパティに反映しないことがあり autoplay が弾かれるため、ref で明示設定する。
@@ -89,11 +89,11 @@ export function NeutralChip({ children }: { children: React.ReactNode }) {
   );
 }
 
-// 終了コードのバッジ: 0 = 緑(通った)/ 非0 = 赤(赤で落ちた)
+// 終了コードのバッジ: 0 = 通った(success)/ 非0 = 失敗(danger)。色名を文言に使わない
 export function ExitCodeChip({ exitCode }: { exitCode?: number }) {
   const ok = exitCode === 0;
   return (
-    <Chip color={ok ? "success" : "danger"} size="sm" title={ok ? "終了コード 0(通った)" : `終了コード ${exitCode}(赤)`}>
+    <Chip color={ok ? "success" : "danger"} size="sm" title={ok ? "終了コード 0(通った)" : `終了コード ${exitCode}(失敗)`}>
       {ok ? "✓" : "✕"} 終了コード {exitCode ?? "—"}
     </Chip>
   );
@@ -102,7 +102,7 @@ export function ExitCodeChip({ exitCode }: { exitCode?: number }) {
 // check_run のひと目要約(一覧のプレビュー領域で使う): 確かめ方 + 終了コードバッジ + サマリ一行。
 // アイコン1文字より「何を実行して何が起きたか」が分かる
 export function CheckRunGlance({ evidence }: { evidence: Evidence }) {
-  const label = evidence.check !== undefined ? (CHECK_LABEL[evidence.check] ?? evidence.check) : "確かめ";
+  const label = evidence.check !== undefined ? checkLabel(evidence.check) : "確かめ";
   const ok = evidence.exitCode === 0;
   return (
     <div className="flex h-full w-full flex-col gap-2 bg-black/4 p-3.5 text-left dark:bg-white/4">

@@ -1,4 +1,30 @@
-// サーバー(src/kernel/api.ts)の読み取りモデルと 1:1 の型。表示専用
+// サーバー(src/kernel/api.ts)の読み取りモデルと 1:1 の型。表示専用。
+// 語彙(型とラベル)は src/ios/words.ts を直接 import する — 対訳の写しをここに持たない
+
+import {
+  CHANGE_KIND_LABEL,
+  CHECK_LABEL,
+  EVIDENCE_KIND_LABEL,
+  REPORT_STATE_LABEL,
+  VERDICT_LABEL,
+} from "../../src/ios/words";
+import type { EvidenceKind, ReportState, Verdict } from "../../src/ios/words";
+
+export { EVIDENCE_KIND_LABEL, REPORT_STATE_LABEL, VERDICT_LABEL };
+export type { EvidenceKind, ReportState, Verdict };
+
+// 語彙導入前の記録は識別子のまま残っている。ラベル参照は必ずこの2つを通す(識別子へのフォールバックを一元化)
+export function checkLabel(check: string): string {
+  return (CHECK_LABEL as Record<string, string>)[check] ?? check;
+}
+
+export function changeKindLabel(kind: string): string {
+  return (CHANGE_KIND_LABEL as Record<string, string>)[kind] ?? kind;
+}
+
+export function reportStateLabel(state: string): string {
+  return (REPORT_STATE_LABEL as Record<string, string>)[state] ?? state;
+}
 
 export interface GateEvent {
   ts: string;
@@ -48,7 +74,7 @@ export interface Build {
 
 export interface Evidence {
   evidenceId: string;
-  kind: "screenshot" | "ui_snapshot" | "video" | "check_run" | "device_report";
+  kind: EvidenceKind;
   storedFile: string;
   note?: string;
   attachedAt: string;
@@ -66,8 +92,6 @@ export interface Evidence {
   dirty?: boolean;
   headline?: string; // サーバーが付ける派生値: ログ末尾のサマリ一行
 }
-
-export type ReportState = "draft" | "evidenced" | "passed" | "failed" | "unconfirmed" | "submitted";
 
 export interface BehaviorEntry {
   behavior: string;
@@ -111,15 +135,6 @@ export interface Report {
   submission?: Submission;
 }
 
-export const REPORT_STATE_LABEL: Record<ReportState, string> = {
-  draft: "下書き",
-  evidenced: "証拠あり",
-  passed: "合格",
-  failed: "不合格",
-  unconfirmed: "確認できず",
-  submitted: "提出済み",
-};
-
 export const REPORT_STATE_COLOR: Record<ReportState, "default" | "accent" | "success" | "danger" | "warning"> = {
   draft: "default",
   evidenced: "accent",
@@ -127,31 +142,6 @@ export const REPORT_STATE_COLOR: Record<ReportState, "default" | "accent" | "suc
   failed: "danger",
   unconfirmed: "warning",
   submitted: "success",
-};
-
-// 確かめ方の語彙(ゲート words.ts と 1:1)。語彙導入前の記録は識別子のまま表示される
-export const CHECK_LABEL: Record<string, string> = {
-  compile: "コンパイル",
-  unit_test: "ユニットテスト",
-  screenshot: "スクショ",
-  interaction_log: "操作記録",
-  ui_test: "UIテスト",
-  video: "録画",
-  launch_check: "起動確認",
-  device_report: "実機レポート",
-  human_check: "人間確認",
-};
-
-// 変更の種類の語彙(ゲート words.ts と 1:1)
-export const CHANGE_KIND_LABEL: Record<string, string> = {
-  logic: "ロジック",
-  appearance: "見た目",
-  interaction: "操作・遷移",
-  motion: "動き",
-  data: "データ",
-  contract: "契約",
-  config: "設定",
-  system: "連携",
 };
 
 export interface RepoDetail {
@@ -219,14 +209,6 @@ export function humanTime(iso: string): { text: string; title: string } {
   };
 }
 
-export const KIND_LABEL: Record<Evidence["kind"], string> = {
-  screenshot: "スクリーンショット",
-  ui_snapshot: "UI スナップショット",
-  video: "録画",
-  check_run: "確かめの記録",
-  device_report: "実機レポート",
-};
-
 export function evidenceIcon(kind: Evidence["kind"]): string {
   return kind === "video" ? "🎞" : kind === "check_run" ? "🧪" : kind === "device_report" ? "📱" : "🧩";
 }
@@ -243,8 +225,8 @@ export function isErrorLogLine(line: string): boolean {
 // 実機レポートは実機で走ったアプリのセルフレポート
 export function evidenceCaption(item: Evidence): string {
   if (item.kind === "check_run") {
-    const label = item.check !== undefined ? (CHECK_LABEL[item.check] ?? item.check) : "確かめ";
-    const outcome = item.exitCode === 0 ? "終了コード 0" : `終了コード ${item.exitCode}(赤)`;
+    const label = item.check !== undefined ? checkLabel(item.check) : "確かめ";
+    const outcome = item.exitCode === 0 ? "終了コード 0" : `終了コード ${item.exitCode}(失敗)`;
     return item.note ?? `${label}をゲートが実行 — ${outcome}`;
   }
   if (item.kind === "device_report") {
@@ -277,12 +259,11 @@ export function eventSentence(event: GateEvent): string {
     return event.result === "ok" ? `報告を開いた${again}` : "報告を開くのを拒否";
   }
   if (event.tool === "run_check") {
-    const check = event.check !== undefined ? (CHECK_LABEL[event.check] ?? event.check) : "確かめ";
+    const check = event.check !== undefined ? checkLabel(event.check) : "確かめ";
     return event.result === "ok" ? `${check}を実行(終了コード ${event.exitCode})${again}` : `${check}の実行を拒否`;
   }
   if (event.tool === "judge") {
-    const verdict = REPORT_STATE_LABEL[event.verdict as ReportState] ?? event.verdict;
-    return event.result === "ok" ? `判定した — ${verdict}` : "判定を拒否";
+    return event.result === "ok" ? `判定した — ${reportStateLabel(event.verdict ?? "")}` : "判定を拒否";
   }
   if (event.tool === "submit") {
     if (event.result !== "ok") return "提出を拒否";
@@ -295,7 +276,7 @@ export function eventSentence(event: GateEvent): string {
     return "記録を掃除(人間の操作)";
   }
   if (event.tool === "report_state") {
-    return `報告が「${REPORT_STATE_LABEL[event.state as ReportState] ?? event.state}」になった`;
+    return `報告が「${reportStateLabel(event.state ?? "")}」になった`;
   }
   return event.tool;
 }

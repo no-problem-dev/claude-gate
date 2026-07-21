@@ -1,10 +1,17 @@
 import { Card, Chip } from "@heroui/react";
+import {
+  CHANGE_KINDS,
+  CHANGE_KIND_LABEL,
+  CHECK_KINDS,
+  CHECK_LABEL,
+  VERDICT_LABEL,
+} from "../../src/ios/words";
 import { SectionTitle } from "./BuildsTab";
 import { LoopDiagram, ReportStateDiagram, VerifyDiagram } from "./Diagrams";
 
 // ガイド: この仕組み(形式言語)の人間向け説明書。
-// 内容は言語定義(src/ios/words.ts の語彙)のレンダリング。
-// 言語を変えたらここも同じ変更で更新する(docs/dashboard-design.md §5)
+// 語彙の列挙(変更の種類・確かめ方・判定値)は words.ts をそのままレンダリングする(写しを持たない)。
+// 概念の一言説明だけこのファイルが持つ(docs/dashboard-design.md §5)
 
 export function GuideView() {
   return (
@@ -156,9 +163,15 @@ export function GuideView() {
               <Word ja="ビルドID" en="build_id">中身から計算する同一性。偽れない</Word>
               <Word ja="証拠" en="evidence">受理された観測の記録(スクショ・UIスナップショット・録画・確かめの記録)</Word>
               <Word ja="出所" en="source">その観測がどのビルドから取れたか</Word>
-              <Word ja="判定" en="verdict">OK / NG / 確認できず の3値</Word>
-              <Word ja="変更の種類" en="change_kind">何を変えたか(ロジック / 見た目 / 操作・遷移 / 動き / データ / 契約 / 設定 / 連携)</Word>
-              <Word ja="確かめ方" en="check">動作をどう確かめるか(コンパイル / ユニットテスト / スクショ / 操作記録 / UIテスト / 録画 / 起動確認 / 人間確認)。宣言に使える語彙はこの8つに固定</Word>
+              <Word ja="判定" en="verdict">
+                動作の判定は {Object.values(VERDICT_LABEL).join(" / ")} の3値。報告の判定は 合格 / 不合格 / 確認できず(層の違う語を混ぜない)
+              </Word>
+              <Word ja="変更の種類" en="change_kind">
+                何を変えたか({CHANGE_KINDS.map((k) => CHANGE_KIND_LABEL[k]).join(" / ")})
+              </Word>
+              <Word ja="確かめ方" en="check">
+                動作をどう確かめるか({CHECK_KINDS.map((k) => CHECK_LABEL[k]).join(" / ")})。宣言に使える語彙はこの{CHECK_KINDS.length}つに固定
+              </Word>
               <Word ja="合格ライン" en="passline">変更の種類ごとに使ってよい確かめ方。下げる例外は人間が gate.yaml を変える(git に残る)</Word>
               <Word ja="確かめの記録" en="check_run">ゲート自身がコマンドを実行した結果(終了コード + 出力ログ)の証拠</Word>
               <Word ja="見えないこと台帳" en="cannot_see registry">検証器に見えない領域のデータ(課金 × シミュレータ等)。一致したら判定は 確認できず</Word>

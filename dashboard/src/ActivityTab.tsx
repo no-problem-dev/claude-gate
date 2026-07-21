@@ -10,8 +10,8 @@ import { AcceptBadge, BuildDot, RejectBadge, ReportLink, Time } from "./componen
 
 export type ActivityFilter = "milestones" | "rejected" | "all";
 
-// 「節目」= 報告の一生の節目(開く・判定・提出・掃除)+ 全ての拒否
-const MILESTONE_TOOLS = new Set(["open_report", "judge", "submit", "forget"]);
+// 「節目」= 報告の一生の節目(開く・判定・提出・人間確認・掃除)+ 全ての拒否
+const MILESTONE_TOOLS = new Set(["open_report", "judge", "submit", "confirm", "forget"]);
 
 const FILTERS: { key: ActivityFilter; label: string }[] = [
   { key: "milestones", label: "節目" },

@@ -24,7 +24,9 @@ export function EvidenceTab({
 
   const visual = detail.evidence.filter((e) => e.kind === "screenshot" || e.kind === "video");
   const checkRuns = detail.evidence.filter((e) => e.kind === "check_run");
-  const others = detail.evidence.filter((e) => e.kind === "ui_snapshot" || e.kind === "device_report");
+  const others = detail.evidence.filter(
+    (e) => e.kind === "ui_snapshot" || e.kind === "device_report" || e.kind === "human_check",
+  );
 
   return (
     <div className="grid gap-6">
@@ -90,7 +92,7 @@ export function EvidenceTab({
 
       {others.length > 0 && (
         <section>
-          <GroupTitle>その他の観測(UIスナップショット・実機レポート) {others.length}件</GroupTitle>
+          <GroupTitle>その他の観測(UIスナップショット・実機レポート・人間確認) {others.length}件</GroupTitle>
           <Card className="overflow-hidden p-0">
             <ol>
               {others.map((item, i) => {
@@ -163,7 +165,9 @@ function VisualCard({
           <TaxonomyChip>{EVIDENCE_KIND_LABEL[item.kind]}</TaxonomyChip>
           <Time iso={item.attachedAt} className="ml-auto" />
         </div>
-        <p className="mt-2 mb-1.5 text-[13px]">{evidenceCaption(item)}</p>
+        <p className="clamp-2 mt-2 mb-1.5 text-[13px]" title={evidenceCaption(item)}>
+          {evidenceCaption(item)}
+        </p>
         <div className="grid gap-1">
           <UsedByChips item={item} onOpenReport={onOpenReport} />
           {build !== undefined && <BuildLink build={build} onOpen={onOpenBuild} />}

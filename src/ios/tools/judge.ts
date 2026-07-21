@@ -77,8 +77,8 @@ export function judge(args: JudgeArgs): Reply<Report> {
     return {
       status: "ok",
       state: report,
-      note: `${noteBase}。提出(submit)はスライス3 で実装予定 — 現時点の提出判断は人間`,
-      nextSteps: [],
+      note: `${noteBase}。submit で提出できる(検証したソースと HEAD の一致をゲートが照合する)`,
+      nextSteps: ["submit"],
     };
   }
   if (result.verdict === "failed") {

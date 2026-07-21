@@ -121,7 +121,7 @@ export function Lightbox({
                   </span>
                 </Fact>
               </>
-            ) : (
+            ) : evidence.kind === "human_check" ? null : (
               <>
                 <Fact label="アプリ">
                   <span className="font-mono">{evidence.bundleId}</span>

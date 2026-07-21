@@ -13,7 +13,11 @@ export const VERDICT_LABEL: Record<Verdict, string> = {
 // 証拠の種類。check_run(確かめの記録)はゲート自身がコマンドを実行した結果(2b)。
 // device_report(実機レポート)は実機で走ったアプリ自身のセルフレポート(console 出力等) —
 // 実機からは .app を取り出せないので、出所照合はビルドの中身ハッシュではなく Mach-O UUID で行う
-export type EvidenceKind = "screenshot" | "ui_snapshot" | "video" | "check_run" | "device_report";
+// human_check(人間確認)は**人間だけが作れる証拠**(CLI `claude-gate confirm`)。
+// エージェントの語彙(MCP ツール)には入れない — attach_evidence の kind からも型・スキーマ両方で除外。
+// 人間は最上位の検証器: 機械に見えない動作(human_check 宣言・見えないこと台帳・動きの質)は、
+// 人間確認の証拠が付いたときだけ判定が OK になる
+export type EvidenceKind = "screenshot" | "ui_snapshot" | "video" | "check_run" | "device_report" | "human_check";
 
 export const EVIDENCE_KIND_LABEL: Record<EvidenceKind, string> = {
   screenshot: "スクリーンショット",
@@ -21,6 +25,7 @@ export const EVIDENCE_KIND_LABEL: Record<EvidenceKind, string> = {
   video: "録画",
   check_run: "確かめの記録",
   device_report: "実機レポート",
+  human_check: "人間確認",
 };
 
 // ビルド: 検証対象の成果物。buildId は成果物の中身から計算する(git の commit ID と同じ仕組み)

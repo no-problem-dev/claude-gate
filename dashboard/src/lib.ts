@@ -249,7 +249,11 @@ export function humanTime(iso: string): { text: string; title: string } {
 }
 
 export function evidenceIcon(kind: Evidence["kind"]): string {
-  return kind === "video" ? "🎞" : kind === "check_run" ? "🧪" : kind === "device_report" ? "📱" : "🧩";
+  if (kind === "video") return "🎞";
+  if (kind === "check_run") return "🧪";
+  if (kind === "device_report") return "📱";
+  if (kind === "human_check") return "👤";
+  return "🧩";
 }
 
 // 失敗行のハイライト判定(ログ表示用)。サーバーの src/ios/log_summary.ts ERROR_LINE_RE と 1:1
@@ -270,6 +274,9 @@ export function evidenceCaption(item: Evidence): string {
   }
   if (item.kind === "device_report") {
     return item.note ?? "実機で走ったアプリのセルフレポート(Mach-O UUID 照合済み)";
+  }
+  if (item.kind === "human_check") {
+    return item.note !== undefined ? `人間が確認した: ${item.note}` : "人間確認の記録";
   }
   return item.note ?? "(note なし)";
 }
@@ -324,6 +331,11 @@ export function eventSentence(event: GateEvent): string {
     return event.prNumber !== undefined
       ? `提出した — PR #${event.prNumber} をレビュー可能にした`
       : `提出した — ${event.branch ?? ""} を push`;
+  }
+  if (event.tool === "confirm") {
+    return event.result === "ok"
+      ? `人間が動作${event.behaviorIndex ?? ""}を確認した${again}${stateSuffix(event)}`
+      : "人間確認を拒否";
   }
   if (event.tool === "forget") {
     return "記録を掃除(人間の操作)";

@@ -205,6 +205,10 @@ function ReportCard({
         </ul>
       )}
 
+      {report.state === "unconfirmed" && (
+        <ConfirmHint report={report} worksite={detail.commonDir.replace(/\/\.git$/, "")} />
+      )}
+
       <SectionTitle>カバレッジ — 動作 × 証拠 × 判定</SectionTitle>
       <ol className="grid gap-2">
         {report.behaviors.map((entry, i) => {
@@ -297,6 +301,26 @@ function ReportCard({
         </>
       )}
     </Card>
+    </div>
+  );
+}
+
+// 人間確認待ちの解決導線: 確認できずの動作を列挙し、そのまま実行できる人間確認コマンドを添える。
+// 人間確認は人間だけの CLI 操作(証拠として記録され、自動で再判定される)— docs/dashboard-design.md「注意の導出」
+function ConfirmHint({ report, worksite }: { report: Report; worksite: string }) {
+  const targets =
+    report.judgment?.behaviors.filter((b) => b.verdict === "unconfirmed").map((b) => b.index) ?? [];
+  if (targets.length === 0) return null;
+  const command = `claude-gate confirm "${worksite}" --report "${report.title}" --behavior ${targets[0]} --note "確認した内容"`;
+  return (
+    <div className="mt-3 grid gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/8 p-3 text-[13px]">
+      <p>
+        解決するには: 動作 {targets.join("・")} を自分の目で確かめ、確認できたら人間確認を記録する
+        (証拠になり、自動で再判定される)
+      </p>
+      <code className="block font-mono text-[11.5px] break-all select-all text-zinc-600 dark:text-zinc-300">
+        {command}
+      </code>
     </div>
   );
 }

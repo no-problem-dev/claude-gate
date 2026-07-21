@@ -10,7 +10,7 @@ import {
   foldReportStateEvents,
   reportGroup,
 } from "./lib";
-import { Time } from "./components";
+import { ReportLink, Time } from "./components";
 import { BuildsTab } from "./BuildsTab";
 import { EvidenceTab } from "./EvidenceTab";
 import { ActivityFilter, ActivityTab } from "./ActivityTab";
@@ -222,7 +222,7 @@ export function App() {
                 setTab("activity");
                 setActivityFilter("rejected");
               }}
-              onOpenReports={() => setTab("reports")}
+              onOpenReport={openReport}
             />
 
             <Tabs
@@ -316,54 +316,76 @@ export function App() {
 
 // 注意帯: 今、人が見るべきものだけを単票の一等地に出す(docs/dashboard-design.md「注意の導出」)。
 // 無ければ何も出さない — 静けさが正常の表現
+// 注意帯: 今、人が見るべきものだけを単票の一等地に出す。件数ではなく**対象そのものへのリンク**を置く —
+// クリック1回で該当の報告カード(強調スクロール)・拒否のできごとに着地する。無ければ何も出さない
 function AttentionBand({
   detail,
   onOpenRejections,
-  onOpenReports,
+  onOpenReport,
 }: {
   detail: RepoDetail;
   onOpenRejections: () => void;
-  onOpenReports: () => void;
+  onOpenReport: (reportId: string) => void;
 }) {
   const unresolved = detail.unresolvedRejections;
-  const awaitingHuman = detail.reports.filter((r) => reportGroup(r.state) === "awaiting_human").length;
-  const awaitingSubmit = detail.reports.filter((r) => reportGroup(r.state) === "awaiting_submit").length;
-  if (unresolved.length === 0 && awaitingHuman === 0 && awaitingSubmit === 0) return null;
+  const awaitingHuman = detail.reports.filter((r) => reportGroup(r.state) === "awaiting_human");
+  const awaitingSubmit = detail.reports.filter((r) => reportGroup(r.state) === "awaiting_submit");
+  if (unresolved.length === 0 && awaitingHuman.length === 0 && awaitingSubmit.length === 0) return null;
+
+  const latestRejectedReport = detail.reports.find((r) => r.reportId === unresolved[0]?.reportId);
 
   return (
     <div className="mt-3 grid gap-2">
       {unresolved.length > 0 && (
-        <button
-          className="flex w-full cursor-pointer flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl border border-red-600/40 bg-red-600/8 px-3.5 py-2.5 text-left text-[13px] transition-colors hover:bg-red-600/12"
-          onClick={onOpenRejections}
-        >
-          <span className="font-semibold text-red-700 dark:text-red-300">
+        <div className="flex w-full flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl border border-red-600/40 bg-red-600/8 px-3.5 py-2.5 text-[13px]">
+          <button
+            className="cursor-pointer font-semibold text-red-700 underline-offset-2 hover:underline dark:text-red-300"
+            title="できごとタブの「拒否だけ」へ"
+            onClick={onOpenRejections}
+          >
             ✕ {UNRESOLVED_REJECTION_LABEL} {unresolved.length}件
-          </span>
+          </button>
           <span className="min-w-0 text-zinc-600 [overflow-wrap:anywhere] dark:text-zinc-300">
             直近: {eventSentence(unresolved[0])}
             {unresolved[0].reason !== undefined && ` — ${unresolved[0].reason}`}
           </span>
-        </button>
+          {latestRejectedReport !== undefined && (
+            <ReportLink
+              label={latestRejectedReport.title}
+              title={`拒否された報告「${latestRejectedReport.title}」を開く`}
+              onOpen={() => onOpenReport(latestRejectedReport.reportId)}
+            />
+          )}
+        </div>
       )}
-      {(awaitingHuman > 0 || awaitingSubmit > 0) && (
-        <div className="flex flex-wrap gap-2">
-          {awaitingHuman > 0 && (
-            <button
-              className="cursor-pointer rounded-full border border-amber-500/50 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-500/16 dark:text-amber-300"
-              onClick={onOpenReports}
-            >
-              👤 {REPORT_GROUP_LABEL.awaiting_human} {awaitingHuman}件
-            </button>
-          )}
-          {awaitingSubmit > 0 && (
-            <button
-              className="cursor-pointer rounded-full border border-black/10 px-3 py-1 text-xs font-semibold text-zinc-600 transition-colors hover:bg-black/4 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
-              onClick={onOpenReports}
-            >
-              {REPORT_GROUP_LABEL.awaiting_submit} {awaitingSubmit}件
-            </button>
-          )}
+      {awaitingHuman.length > 0 && (
+        <div className="flex w-full flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-amber-500/50 bg-amber-500/8 px-3.5 py-2.5 text-[13px]">
+          <span className="font-semibold text-amber-700 dark:text-amber-300">
+            👤 {REPORT_GROUP_LABEL.awaiting_human} {awaitingHuman.length}件
+          </span>
+          {awaitingHuman.map((report) => (
+            <ReportLink
+              key={report.reportId}
+              label={report.title}
+              title={`報告「${report.title}」を開いて証拠を確認する`}
+              onOpen={() => onOpenReport(report.reportId)}
+            />
+          ))}
+        </div>
+      )}
+      {awaitingSubmit.length > 0 && (
+        <div className="flex w-full flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-black/10 px-3.5 py-2.5 text-[13px] dark:border-white/10">
+          <span className="font-semibold text-zinc-600 dark:text-zinc-300">
+            {REPORT_GROUP_LABEL.awaiting_submit} {awaitingSubmit.length}件
+          </span>
+          {awaitingSubmit.map((report) => (
+            <ReportLink
+              key={report.reportId}
+              label={report.title}
+              title={`報告「${report.title}」を開く(提出はエージェントの submit)`}
+              onOpen={() => onOpenReport(report.reportId)}
+            />
+          ))}
         </div>
       )}
     </div>

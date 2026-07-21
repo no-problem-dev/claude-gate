@@ -25,13 +25,14 @@ Claude Code セッション(対話 / 並列ワーカー / cron)… N 個
 - **全操作べき等**: ID は乱数ではなく中身・対象から決める。同じ呼び出しを2回しても状態は1つ。再実行・リトライ・スケジュール実行が安全
 - **セッション状態を持たない**: 全ツールが対象(worksitePath 等)を明示引数で受ける。並列で何セッション繋がっても混線しない
 - **silent fallback 禁止**: 失敗は必ず rejected(reason + fix)として表面化する
-- **掃除はエージェントの語彙に入れない**: 記録の削除は人間の CLI(`claude-gate forget`)のみ。参照されている記録は消せず、レコード単位の削除は監査ログに残る
+- **掃除と人間確認はエージェントの語彙に入れない**: 記録の削除は人間の CLI(`claude-gate forget`)のみ。
+  人間確認(`claude-gate confirm`)も人間だけの CLI — 「確認できず」の動作を人間が確かめた事実を証拠(kind: human_check)として記録し、自動で再判定する。人間は最上位の検証器で、機械に見えない経路(human_check 宣言・見えないこと台帳・動きの質)はこの証拠でだけ OK になる。attach_evidence の kind からは型・スキーマ両方で除外(エージェントは人間確認を偽れない)
 
 ## コード構成
 
 ```
 src/
-  cli.ts             # claude-gate CLI(serve / install / doctor / init / forget)。launchd plist を動的生成
+  cli.ts             # claude-gate CLI(serve / install / doctor / init / confirm / forget)。launchd plist を動的生成
   kernel/            # ドメイン非依存の薄い機構
     server.ts        # HTTP MCP(stateless streamable)+ ダッシュボード API/配信。ツール登録
     store.ts         # 状態の置き場の解決と JSON 読み書き
@@ -53,6 +54,7 @@ src/
     defaults.ts      # 同梱デフォルト(passline・見えないこと台帳)
     judge_core.ts    # 判定のコア(全入力を引数で受ける pure function)
     report_link.ts   # 証拠と報告の紐づけ + FSM の移動(判定後の証拠追加で判定を無効化)
+    confirm.ts       # 人間確認(claude-gate confirm)の本体: human_check 証拠の記録 + 自動再判定。人間だけの CLI
     tools/           # MCP ツールの本体(open_report / register_build / attach_evidence /
                      #   run_check / judge / submit)
 dashboard/           # React ダッシュボード(HeroUI v3 + Tailwind v4。設計 = docs/dashboard-design.md)

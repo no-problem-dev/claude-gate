@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { confirmBehavior } from "./ios/confirm.js";
 import { initGateYaml } from "./ios/gate_init.js";
 import { forgetBuild, forgetEvidence, forgetRepo, forgetReport, resolveRepoKey } from "./kernel/forget.js";
 import { gateHome } from "./kernel/store.js";
@@ -27,6 +28,9 @@ switch (command) {
   case "init":
     init();
     break;
+  case "confirm":
+    confirm(process.argv.slice(3));
+    break;
   case "forget":
     forget(process.argv.slice(3));
     break;
@@ -47,6 +51,31 @@ function init(): void {
 }
 
 // 掃除(人間の操作。エージェントには MCP ツールとして公開しない)
+// 人間確認(人間の操作): 動作を自分の目で確かめた事実を証拠として記録し、自動で再判定する
+function confirm(args: string[]): void {
+  const [worksitePath, ...rest] = args;
+  const flags = new Map<string, string>();
+  for (let i = 0; i < rest.length; i += 2) {
+    if (rest[i]?.startsWith("--") && rest[i + 1] !== undefined) flags.set(rest[i], rest[i + 1]);
+  }
+  const report = flags.get("--report");
+  const behavior = Number(flags.get("--behavior"));
+  const note = flags.get("--note");
+  if (!worksitePath || report === undefined || !Number.isInteger(behavior) || note === undefined) {
+    console.log('usage: claude-gate confirm <worksitePath> --report <作業名|reportId> --behavior <番号> --note "何を確認したか"');
+    process.exitCode = 1;
+    return;
+  }
+  const result = confirmBehavior({ worksitePath, report, behaviorIndex: behavior, note });
+  if (result.status === "rejected") {
+    console.log(`✗ ${result.reason}`);
+    console.log(`  直し方: ${result.fix}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`✓ ${result.note}`);
+}
+
 function forget(args: string[]): void {
   const [target, flag, id] = args;
   if (!target) {
@@ -200,6 +229,7 @@ function help(): void {
   install  launchd に常駐させる(べき等)
   doctor   稼働状態を点検する(デーモン/ダッシュボード/プラグイン)
   init     カレントリポジトリに gate.yaml の雛形を作る(既存は上書きしない)
+  confirm  人間確認(人間の操作): 動作を確かめた事実を証拠に記録し、自動で再判定
   forget   掃除(人間の操作): リポジトリの状態 / --build / --report / --evidence を削除
            参照されている記録は消せない。レコード単位の削除は監査ログに残る`);
 }

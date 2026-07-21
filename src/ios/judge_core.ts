@@ -47,7 +47,7 @@ function covers(check: CheckKind, e: Evidence): boolean {
     case "device_report":
       return e.kind === "device_report"; // 実機セルフレポートは実機レポートでのみ覆える
     case "human_check":
-      return false; // 機械の証拠では覆えない(人間に渡すための確かめ方)
+      return e.kind === "human_check"; // 人間確認の証拠(CLI confirm。人間だけが作れる)でのみ覆える
   }
 }
 
@@ -74,9 +74,22 @@ export function judgeReport(input: JudgeInput): JudgeResult {
       );
       continue;
     }
-    // 3. 人間確認は機械が確認したことにしない
+    const linked = report.evidence
+      .filter((l) => l.behaviorIndex === index)
+      .map((l) => evidenceById[l.evidenceId])
+      .filter((e): e is Evidence => e !== undefined);
+
+    // 3. 人間確認の証拠(人間だけが作れる)が付いた動作は OK — 人間は最上位の検証器。
+    // 機械に見えない経路(human_check 宣言・見えないこと台帳・動きの質)は全てこれで解決する。
+    // 人間確認は出所照合の対象にしない(覆い covering に入れない — 人間の判断そのもの)
+    const humanConfirms = linked.filter((e) => e.kind === "human_check");
+    if (humanConfirms.length > 0) {
+      const latest = humanConfirms.reduce((a, b) => (a.attachedAt >= b.attachedAt ? a : b));
+      push("ok", `人間が確認した${latest.note !== undefined ? `: ${latest.note}` : ""}`);
+      continue;
+    }
     if (entry.check === "human_check") {
-      push("unconfirmed", "人間確認の動作。機械は確認できない — 人間に渡す");
+      push("unconfirmed", "人間確認の動作。機械は確認できない — 人間に渡す(確認したら claude-gate confirm)");
       continue;
     }
     // 4. K-3: 見えないこと台帳に一致する動作は、証拠が付いていても OK に潰さない
@@ -91,10 +104,6 @@ export function judgeReport(input: JudgeInput): JudgeResult {
     // 覆いに使うのは動作ごとに「最新の適合証拠1件」だけ: 記録は積み上がる一方(不変)なので、
     // 全部を覆いに数えると、取り直し前の古い証拠が同一ソース要件を永久に破る(実際に起きた)。
     // 判定が答えるのは「最新の検証が何を見たか」
-    const linked = report.evidence
-      .filter((l) => l.behaviorIndex === index)
-      .map((l) => evidenceById[l.evidenceId])
-      .filter((e): e is Evidence => e !== undefined);
     const matched = linked.filter((e) => covers(entry.check, e));
     const okCovers = matched.filter((e) => e.kind !== "check_run" || e.exitCode === 0);
     if (okCovers.length === 0) {
@@ -109,7 +118,7 @@ export function judgeReport(input: JudgeInput): JudgeResult {
     covering.push(latest);
     // 6. 動きの質は機械に見えない: 録画の存在と出所までを機械が確かめ、合否は人間
     if (entry.change_kind === "motion") {
-      push("unconfirmed", "録画は受理済み。動きの質の合否は人間が判断する");
+      push("unconfirmed", "録画は受理済み。動きの質の合否は人間が判断する(確認したら claude-gate confirm)");
       continue;
     }
     // 7. 覆われている

@@ -4,6 +4,7 @@ import {
   CHANGE_KIND_LABEL,
   CHECK_KINDS,
   CHECK_LABEL,
+  EVIDENCE_KIND_LABEL,
   VERDICT_LABEL,
 } from "../../src/ios/words";
 import { SectionTitle } from "./components";
@@ -161,7 +162,9 @@ export function GuideView() {
               <Word ja="完了報告" en="report">「できました」の型。作業名と動作一覧を持つ(空の一覧では開けない)</Word>
               <Word ja="ビルド" en="build">検証対象の成果物</Word>
               <Word ja="ビルドID" en="build_id">中身から計算する同一性。偽れない</Word>
-              <Word ja="証拠" en="evidence">受理された観測の記録(スクショ・UIスナップショット・録画・確かめの記録)</Word>
+              <Word ja="証拠" en="evidence">
+                受理された観測の記録({Object.values(EVIDENCE_KIND_LABEL).join("・")})。人間確認だけは人間の CLI(claude-gate confirm)でしか作れない
+              </Word>
               <Word ja="出所" en="source">その観測がどのビルドから取れたか</Word>
               <Word ja="判定" en="verdict">
                 動作の判定は {Object.values(VERDICT_LABEL).join(" / ")} の3値。報告の判定は 合格 / 不合格 / 確認できず(層の違う語を混ぜない)
@@ -191,6 +194,9 @@ export function GuideView() {
             判定が OK / NG の2値ではなく<strong>「確認できず」を含む3値</strong>なのは、
             検証器には見えないことがあるから(例: 課金フローはシミュレータの自動操作では検証が成立しない)。
             見えないものを OK / NG に潰すと、それは嘘になる。
+            「確認できず」は人間に渡す正式な出口で、人間が自分の目で確かめたら
+            <code className="mx-1 font-mono text-xs">claude-gate confirm</code>
+            で記録する — 人間確認は証拠になり、決定論の再判定が報告を前へ進める。
           </p>
         </Card>
       </section>

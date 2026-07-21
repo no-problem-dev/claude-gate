@@ -385,3 +385,53 @@ describe("judge — ツール層", () => {
     expect(again.state.state).toBe("passed"); // 再判定は常に可
   });
 });
+
+describe("judgeReport — 人間確認(human_check 証拠)", () => {
+  const humanCheckEvidence = (id: string, note: string): Evidence => ({
+    evidenceId: id,
+    kind: "human_check",
+    storedFile: `/x/${id}.txt`,
+    note,
+    attachedAt: "t",
+  });
+
+  it("human_check 宣言の動作は、人間確認の証拠が付いたら OK(付かなければ 確認できず)", () => {
+    const behaviors: BehaviorEntry[] = [{ behavior: "課金フローが通る", change_kind: "system", check: "human_check" }];
+    const before = judgeReport(input({ report: makeReport(behaviors, []) }));
+    expect(before.behaviors[0].verdict).toBe("unconfirmed");
+
+    const after = judgeReport(
+      input({
+        report: makeReport(behaviors, [{ evidenceId: "h1", behaviorIndex: 1 }]),
+        evidenceById: { h1: humanCheckEvidence("h1", "Xcode Run で購入まで確認") },
+      }),
+    );
+    expect(after.behaviors[0].verdict).toBe("ok");
+    expect(after.behaviors[0].reason).toContain("人間が確認した");
+    expect(after.verdict).toBe("passed");
+  });
+
+  it("見えないこと台帳に一致する動作も、人間確認の証拠で OK になる", () => {
+    const behaviors: BehaviorEntry[] = [
+      { behavior: "課金の導線が開く", change_kind: "interaction", check: "interaction_log" },
+    ];
+    const result = judgeReport(
+      input({
+        report: makeReport(behaviors, [{ evidenceId: "h1", behaviorIndex: 1 }]),
+        evidenceById: { h1: humanCheckEvidence("h1", "実機で購入シートを確認") },
+      }),
+    );
+    expect(result.behaviors[0].verdict).toBe("ok");
+  });
+
+  it("動き(motion)の動作も、人間確認の証拠で OK になる", () => {
+    const behaviors: BehaviorEntry[] = [{ behavior: "完了の演出が滑らか", change_kind: "motion", check: "video" }];
+    const result = judgeReport(
+      input({
+        report: makeReport(behaviors, [{ evidenceId: "h1", behaviorIndex: 1 }]),
+        evidenceById: { h1: humanCheckEvidence("h1", "録画を見て動きを確認") },
+      }),
+    );
+    expect(result.behaviors[0].verdict).toBe("ok");
+  });
+});

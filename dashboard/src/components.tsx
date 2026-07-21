@@ -278,7 +278,11 @@ export function EvidenceThumb({
         </span>
       )}
       {item.kind !== "check_run" && (
-        <span className="clamp-2 px-2.5 py-2 text-xs text-zinc-600 dark:text-zinc-300">{evidenceCaption(item)}</span>
+        // クランプと padding を同じ要素に載せない: line-clamp は行境界で切るが、
+        // overflow の切り口は padding 端になるため、次の行が半分だけ padding 領域に見えてしまう
+        <span className="block px-2.5 py-2" title={evidenceCaption(item)}>
+          <span className="clamp-2 text-xs text-zinc-600 dark:text-zinc-300">{evidenceCaption(item)}</span>
+        </span>
       )}
     </button>
   );

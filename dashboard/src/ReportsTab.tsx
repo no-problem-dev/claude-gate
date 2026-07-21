@@ -3,21 +3,27 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Evidence,
   REPORT_GROUP_LABEL,
-  REPORT_STATE_COLOR,
-  REPORT_STATE_LABEL,
   Report,
   ReportGroup,
   RepoDetail,
   VERDICT_LABEL,
-  buildTitle,
   changeKindLabel,
   checkLabel,
+  eventSentence,
   formatTime,
   reportGroup,
 } from "./lib";
-import { EvidenceThumb, SectionTitle } from "./BuildsTab";
-import { AcceptBadge, BuildDot, RejectBadge, Time } from "./components";
-import { eventSentence } from "./lib";
+import {
+  AcceptBadge,
+  BuildLink,
+  EvidenceThumb,
+  ExpandableText,
+  RejectBadge,
+  ReportStateChip,
+  SectionTitle,
+  TaxonomyChip,
+  Time,
+} from "./components";
 
 // 完了報告タブ: この仕組みの主役オブジェクト。
 // 状態グループで並べる(人間確認待ち → 提出待ち → 進行中 → 終着)。「今、誰の番か」が先、個々のカードが後。
@@ -147,9 +153,7 @@ function ReportCard({
     <Card className={`p-5 ${focused ? "ring-2 ring-blue-500/60" : ""}`}>
       <header className="flex flex-wrap items-center gap-2.5">
         <h3 className="text-base font-semibold">{report.title}</h3>
-        <Chip color={REPORT_STATE_COLOR[report.state]} size="sm">
-          {REPORT_STATE_LABEL[report.state]}
-        </Chip>
+        <ReportStateChip state={report.state} />
         {report.judgment !== undefined && (
           <span className="text-xs text-zinc-500 dark:text-zinc-400" title="判定した時刻">
             判定 {formatTime(report.judgment.judgedAt)}
@@ -218,13 +222,9 @@ function ReportCard({
                 </span>
                 <span className="min-w-0 flex-1 text-[13.5px] font-medium">{entry.behavior}</span>
                 {entry.change_kind !== undefined && (
-                  <Chip color="default" size="sm" title="変更の種類">
-                    {changeKindLabel(entry.change_kind)}
-                  </Chip>
+                  <TaxonomyChip title="変更の種類">{changeKindLabel(entry.change_kind)}</TaxonomyChip>
                 )}
-                <Chip color="default" size="sm" title="宣言した確かめ方">
-                  {checkLabel(entry.check)}
-                </Chip>
+                <TaxonomyChip title="宣言した確かめ方">{checkLabel(entry.check)}</TaxonomyChip>
                 {verdict !== undefined ? (
                   <Chip
                     color={verdict.verdict === "ok" ? "success" : verdict.verdict === "ng" ? "danger" : "warning"}
@@ -243,7 +243,10 @@ function ReportCard({
                 )}
               </div>
               {verdict?.reason !== undefined && (
-                <p className="mt-2 text-[12.5px] leading-relaxed text-zinc-600 dark:text-zinc-300">{verdict.reason}</p>
+                <ExpandableText
+                  text={verdict.reason}
+                  className="mt-2 text-[12.5px] leading-relaxed text-zinc-600 dark:text-zinc-300"
+                />
               )}
               {evidence.length > 0 && (
                 <div className="mt-2.5 grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2.5">
@@ -262,15 +265,12 @@ function ReportCard({
           <span className="text-[11px] tracking-widest text-zinc-500 uppercase dark:text-zinc-400">対象ビルド</span>
           {report.buildIds.map((buildId) => {
             const build = detail.builds.find((b) => b.buildId === buildId);
-            return (
-              <button
-                key={buildId}
-                className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-zinc-600 transition-colors hover:text-blue-600 dark:text-zinc-300 dark:hover:text-blue-400"
-                onClick={() => onOpenBuild(buildId)}
-              >
-                <BuildDot buildId={buildId} size={8} />
-                {build ? buildTitle(build) : <span className="font-mono">{buildId.slice(0, 6)}</span>}
-              </button>
+            return build !== undefined ? (
+              <BuildLink key={buildId} build={build} onOpen={onOpenBuild} />
+            ) : (
+              <span key={buildId} className="font-mono text-xs text-zinc-500 dark:text-zinc-400">
+                {buildId.slice(0, 6)}(掃除済み)
+              </span>
             );
           })}
         </div>

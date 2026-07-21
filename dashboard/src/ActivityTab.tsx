@@ -1,7 +1,7 @@
 import { Card } from "@heroui/react";
 import { useMemo } from "react";
 import { GateEvent, RepoDetail, dayLabel, eventSentence } from "./lib";
-import { AcceptBadge, BuildDot, RejectBadge, Time } from "./components";
+import { AcceptBadge, BuildDot, RejectBadge, ReportLink, Time } from "./components";
 
 // できごとタブ: 監査ログを日本語の文で。日付でセクション分けし、
 // 各行に対象オブジェクトのチップ(報告 = 作業名 / ビルド = 色ドット)を付ける。
@@ -133,13 +133,11 @@ function EventRow({
         {event.reason && <span className="text-zinc-600 dark:text-zinc-300"> — {event.reason}</span>}
       </span>
       {report !== undefined && (
-        <button
-          className="max-w-56 cursor-pointer truncate rounded-full border border-black/10 px-2.5 py-0.5 text-xs text-zinc-600 transition-colors hover:border-blue-500 hover:text-blue-600 dark:border-white/10 dark:text-zinc-300 dark:hover:text-blue-400"
+        <ReportLink
+          label={report.title}
           title={`報告「${report.title}」を開く`}
-          onClick={() => onOpenReport(report.reportId)}
-        >
-          {report.title}
-        </button>
+          onOpen={() => onOpenReport(report.reportId)}
+        />
       )}
       {buildExists && (
         <button

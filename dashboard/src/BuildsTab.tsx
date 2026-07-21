@@ -1,7 +1,16 @@
 import { Card, Chip } from "@heroui/react";
 import { useMemo } from "react";
-import { Build, Evidence, RepoDetail, buildTitle, eventSentence, evidenceCaption, evidenceIcon, formatTime } from "./lib";
-import { AcceptBadge, BuildDot, CheckRunGlance, DirtyChip, EvidenceVideo, RejectBadge, Time } from "./components";
+import { Build, Evidence, RepoDetail, buildTitle, eventSentence, formatTime } from "./lib";
+import {
+  AcceptBadge,
+  BuildDot,
+  DirtyChip,
+  EvidenceThumb,
+  Fact,
+  RejectBadge,
+  SectionTitle,
+  Time,
+} from "./components";
 
 // ビルドタブ: マスター(一覧) ⇄ 詳細。ビルドは「何の・いつのビルドか」で名乗る(ID は二次表現)
 
@@ -52,7 +61,7 @@ export function BuildsTab({
                   <BuildDot buildId={build.buildId} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-semibold whitespace-nowrap">{buildTitle(build)}</span>
+                      <span className="min-w-0 text-sm font-semibold [overflow-wrap:anywhere]">{buildTitle(build)}</span>
                       {build.dirty && <DirtyChip />}
                     </div>
                     <div className="font-mono text-xs text-zinc-500 dark:text-zinc-400">
@@ -147,57 +156,3 @@ function BuildDetail({
   );
 }
 
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[11px] tracking-widest text-zinc-500 uppercase dark:text-zinc-400">{label}</dt>
-      <dd className="m-0 [overflow-wrap:anywhere]">{children}</dd>
-    </div>
-  );
-}
-
-export function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <h4 className="mt-5 mb-2 text-xs font-semibold tracking-widest text-zinc-500 uppercase dark:text-zinc-400">
-      {children}
-    </h4>
-  );
-}
-
-export function EvidenceThumb({
-  item,
-  repoKey,
-  onOpen,
-}: {
-  item: Evidence;
-  repoKey: string;
-  onOpen: (evidenceId: string) => void;
-}) {
-  const fileUrl = `/api/evidence/${repoKey}/${item.evidenceId}/file`;
-  return (
-    <button
-      className="flex cursor-zoom-in flex-col overflow-hidden rounded-xl border border-black/10 text-left transition-colors hover:border-blue-500 dark:border-white/10"
-      onClick={() => onOpen(item.evidenceId)}
-    >
-      {item.kind === "screenshot" ? (
-        <img
-          className="aspect-[9/12] w-full object-cover object-top"
-          src={fileUrl}
-          alt={item.note ?? "スクリーンショット証拠"}
-          loading="lazy"
-        />
-      ) : item.kind === "video" ? (
-        <EvidenceVideo src={fileUrl} className="aspect-[9/12] w-full bg-black object-contain" />
-      ) : item.kind === "check_run" ? (
-        <CheckRunGlance evidence={item} />
-      ) : (
-        <span className="grid aspect-[9/12] place-items-center text-3xl" aria-hidden>
-          {evidenceIcon(item.kind)}
-        </span>
-      )}
-      {item.kind !== "check_run" && (
-        <span className="clamp-2 px-2.5 py-2 text-xs text-zinc-600 dark:text-zinc-300">{evidenceCaption(item)}</span>
-      )}
-    </button>
-  );
-}

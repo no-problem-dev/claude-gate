@@ -280,9 +280,11 @@ export function buildTitle(build: Build): string {
   return `${what} — ${formatTime(build.registeredAt)}`;
 }
 
-// 色の識別点: ビルドID から決定的に色相を導出(補助チャネル。ID 文字列は常に併記)
+// 色の識別点: ビルドID から決定的に色相を導出。状態色(拒否の赤・警告の琥珀・受理の緑)の色相域を
+// 除外した範囲(180°〜330°: シアン〜青〜紫〜マゼンタ)に写像する — 無意味な赤/橙のドットが
+// 「不良」に誤読される事故を色空間の設計で消す(補助チャネル。ID 文字列は常に併記)
 export function buildHue(buildId: string): number {
-  return parseInt(buildId.slice(0, 4), 16) % 360;
+  return 180 + (parseInt(buildId.slice(0, 4), 16) % 150);
 }
 
 // 原因のできごとが運ぶ結果(報告の状態の変化)を文に付記する。

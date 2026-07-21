@@ -5,10 +5,12 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
-/* ビルドの色の識別点(色は JSX 側で oklch を inline 指定) */
+/* ビルドの識別リング(色は JSX 側で oklch を inline 指定)。
+   塗りつぶしの状態バッジと形でも区別する — これは状態ではなく同一性 */
 .build-dot {
   display: inline-block;
   border-radius: 50%;
+  border: 2px solid currentColor;
   flex-shrink: 0;
 }
 

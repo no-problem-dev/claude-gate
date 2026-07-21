@@ -4,14 +4,13 @@ import {
   Build,
   EVIDENCE_KIND_LABEL,
   Evidence,
-  buildTitle,
   checkLabel,
   evidenceCaption,
   evidenceIcon,
   formatTimeFull,
   isErrorLogLine,
 } from "./lib";
-import { AcceptBadge, BuildDot, EvidenceVideo, ExitCodeChip, NeutralChip } from "./components";
+import { AcceptBadge, BuildLink, EvidenceVideo, ExitCodeChip, Fact, ReportLink, TaxonomyChip } from "./components";
 
 const MAX_LOG_LINES = 3000; // 巨大ログでも描画を軽く保つ。超過分は先頭を省略し末尾(失敗はここ)を見せる
 
@@ -78,69 +77,63 @@ export function Lightbox({
         <aside className="overflow-y-auto p-5">
           <div className="flex flex-wrap items-center gap-2 pr-8">
             <AcceptBadge />
-            <NeutralChip>{EVIDENCE_KIND_LABEL[evidence.kind]}</NeutralChip>
+            <TaxonomyChip>{EVIDENCE_KIND_LABEL[evidence.kind]}</TaxonomyChip>
           </div>
           <p className="mt-2.5 text-[13px]">{evidenceCaption(evidence)}</p>
 
           {evidence.usedBy !== undefined && evidence.usedBy.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {evidence.usedBy.map((use) => (
-                <button
+                <ReportLink
                   key={`${use.reportId}-${use.behaviorIndex}`}
-                  className="max-w-full cursor-pointer truncate rounded-full border border-black/10 px-2.5 py-0.5 text-xs text-zinc-600 transition-colors hover:border-blue-500 hover:text-blue-600 dark:border-white/10 dark:text-zinc-300 dark:hover:text-blue-400"
+                  label={`${use.reportTitle} · 動作${use.behaviorIndex}`}
                   title={`報告「${use.reportTitle}」の動作${use.behaviorIndex}を覆う証拠。クリックで報告へ`}
-                  onClick={() => {
+                  onOpen={() => {
                     onOpenReport(use.reportId);
                     onClose();
                   }}
-                >
-                  {use.reportTitle} · 動作{use.behaviorIndex}
-                </button>
+                />
               ))}
             </div>
           )}
 
           {build !== null && evidence.buildId !== undefined && (
-            <button
-              className="mt-1.5 inline-flex cursor-pointer items-center gap-1.5 text-xs text-zinc-600 transition-colors hover:text-blue-600 dark:text-zinc-300 dark:hover:text-blue-400"
-              onClick={() => onOpenBuild(evidence.buildId!)}
-            >
-              <BuildDot buildId={evidence.buildId} size={8} />
-              {buildTitle(build)}
-            </button>
+            <div className="mt-1.5">
+              <BuildLink build={build} onOpen={onOpenBuild} />
+            </div>
           )}
 
           <dl className="mt-4 flex flex-col gap-2">
-            <Meta label="受理">{formatTimeFull(evidence.attachedAt)}</Meta>
+            <Fact label="受理">{formatTimeFull(evidence.attachedAt)}</Fact>
             {evidence.kind === "check_run" ? (
               <>
-                <Meta label="確かめ方">{evidence.check !== undefined ? checkLabel(evidence.check) : "—"}</Meta>
-                <Meta label="コマンド">
+                <Fact label="確かめ方">{evidence.check !== undefined ? checkLabel(evidence.check) : "—"}</Fact>
+                <Fact label="コマンド">
                   <span className="font-mono text-xs">{evidence.command}</span>
-                </Meta>
-                <Meta label="終了コード">
+                </Fact>
+                <Fact label="終了コード">
                   <span className="font-mono">{evidence.exitCode}</span>
-                </Meta>
-                <Meta label="ソース">
+                </Fact>
+                <Fact label="ソース">
                   <span className="font-mono text-xs">
                     {evidence.gitSha ? evidence.gitSha.slice(0, 10) : "コミットなし"}
                     {evidence.dirty === true && "(+未コミットの変更あり)"}
                   </span>
-                </Meta>
+                </Fact>
               </>
             ) : (
               <>
-                <Meta label="アプリ">
+                <Fact label="アプリ">
                   <span className="font-mono">{evidence.bundleId}</span>
-                </Meta>
-                <Meta label="シミュレータ">
+                </Fact>
+                <Fact label="シミュレータ">
                   <span className="font-mono text-xs">{evidence.simulatorUdid}</span>
-                </Meta>
+                </Fact>
               </>
             )}
-            <Meta label="証拠ID">
+            <Fact label="証拠ID">
               <span className="font-mono">{evidence.evidenceId}</span>
-            </Meta>
+            </Fact>
           </dl>
         </aside>
         <Button
@@ -222,11 +215,3 @@ function CheckRunLog({ url, exitCode, check }: { url: string; exitCode?: number;
   );
 }
 
-function Meta({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[11px] tracking-widest text-zinc-500 uppercase dark:text-zinc-400">{label}</dt>
-      <dd className="m-0 [overflow-wrap:anywhere]">{children}</dd>
-    </div>
-  );
-}

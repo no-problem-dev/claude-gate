@@ -1,15 +1,6 @@
 import { Card } from "@heroui/react";
-import {
-  Build,
-  EVIDENCE_KIND_LABEL,
-  Evidence,
-  RepoDetail,
-  buildTitle,
-  checkLabel,
-  evidenceCaption,
-  evidenceIcon,
-} from "./lib";
-import { AcceptBadge, BuildDot, EvidenceVideo, ExitCodeChip, NeutralChip, Time } from "./components";
+import { EVIDENCE_KIND_LABEL, Evidence, RepoDetail, checkLabel, evidenceCaption, evidenceIcon } from "./lib";
+import { AcceptBadge, BuildLink, EvidenceVideo, ExitCodeChip, ReportLink, TaxonomyChip, Time } from "./components";
 
 // 証拠タブ: 帰属(どの報告のどの動作を覆う証拠か)を第一の文脈にする。
 // 種類の性質でコレクションを分ける — スクショ・録画は「見る」もの(ギャラリー)、
@@ -120,9 +111,7 @@ export function EvidenceTab({
                       </button>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         <UsedByChips item={item} onOpenReport={onOpenReport} />
-                        {build !== undefined && item.buildId !== undefined && (
-                          <BuildLink build={build} buildId={item.buildId} onOpenBuild={onOpenBuild} />
-                        )}
+                        {build !== undefined && <BuildLink build={build} onOpen={onOpenBuild} />}
                       </div>
                     </div>
                   </li>
@@ -171,15 +160,13 @@ function VisualCard({
       <div className="px-3.5 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <AcceptBadge />
-          <NeutralChip>{EVIDENCE_KIND_LABEL[item.kind]}</NeutralChip>
+          <TaxonomyChip>{EVIDENCE_KIND_LABEL[item.kind]}</TaxonomyChip>
           <Time iso={item.attachedAt} className="ml-auto" />
         </div>
         <p className="mt-2 mb-1.5 text-[13px]">{evidenceCaption(item)}</p>
         <div className="grid gap-1">
           <UsedByChips item={item} onOpenReport={onOpenReport} />
-          {build !== undefined && item.buildId !== undefined && (
-            <BuildLink build={build} buildId={item.buildId} onOpenBuild={onOpenBuild} />
-          )}
+          {build !== undefined && <BuildLink build={build} onOpen={onOpenBuild} />}
         </div>
       </div>
     </Card>
@@ -195,36 +182,14 @@ function UsedByChips({ item, onOpenReport }: { item: Evidence; onOpenReport: (re
   return (
     <span className="flex flex-wrap items-center gap-1.5">
       {item.usedBy.map((use) => (
-        <button
+        <ReportLink
           key={`${use.reportId}-${use.behaviorIndex}`}
-          className="max-w-64 cursor-pointer truncate rounded-full border border-black/10 px-2.5 py-0.5 text-xs text-zinc-600 transition-colors hover:border-blue-500 hover:text-blue-600 dark:border-white/10 dark:text-zinc-300 dark:hover:text-blue-400"
+          label={`${use.reportTitle} · 動作${use.behaviorIndex}`}
           title={`報告「${use.reportTitle}」の動作${use.behaviorIndex}を覆う証拠。クリックで報告へ`}
-          onClick={() => onOpenReport(use.reportId)}
-        >
-          {use.reportTitle} · 動作{use.behaviorIndex}
-        </button>
+          onOpen={() => onOpenReport(use.reportId)}
+        />
       ))}
     </span>
-  );
-}
-
-function BuildLink({
-  build,
-  buildId,
-  onOpenBuild,
-}: {
-  build: Build;
-  buildId: string;
-  onOpenBuild: (buildId: string) => void;
-}) {
-  return (
-    <button
-      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-zinc-600 transition-colors hover:text-blue-600 dark:text-zinc-300 dark:hover:text-blue-400"
-      onClick={() => onOpenBuild(buildId)}
-    >
-      <BuildDot buildId={buildId} size={8} />
-      {buildTitle(build)}
-    </button>
   );
 }
 

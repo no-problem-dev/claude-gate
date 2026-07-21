@@ -6,7 +6,7 @@ import {
   CHECK_LABEL,
   VERDICT_LABEL,
 } from "../../src/ios/words";
-import { SectionTitle } from "./BuildsTab";
+import { SectionTitle } from "./components";
 import { LoopDiagram, ReportStateDiagram, VerifyDiagram } from "./Diagrams";
 
 // ガイド: この仕組み(形式言語)の人間向け説明書。

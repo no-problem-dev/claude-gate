@@ -5,13 +5,23 @@ import {
   CHANGE_KIND_LABEL,
   CHECK_LABEL,
   EVIDENCE_KIND_LABEL,
+  REPORT_GROUP_LABEL,
   REPORT_STATE_LABEL,
+  UNRESOLVED_REJECTION_LABEL,
   VERDICT_LABEL,
+  reportGroup,
 } from "../../src/ios/words";
-import type { EvidenceKind, ReportState, Verdict } from "../../src/ios/words";
+import type { EvidenceKind, ReportGroup, ReportState, Verdict } from "../../src/ios/words";
 
-export { EVIDENCE_KIND_LABEL, REPORT_STATE_LABEL, VERDICT_LABEL };
-export type { EvidenceKind, ReportState, Verdict };
+export {
+  EVIDENCE_KIND_LABEL,
+  REPORT_GROUP_LABEL,
+  REPORT_STATE_LABEL,
+  UNRESOLVED_REJECTION_LABEL,
+  VERDICT_LABEL,
+  reportGroup,
+};
+export type { EvidenceKind, ReportGroup, ReportState, Verdict };
 
 // 語彙導入前の記録は識別子のまま残っている。ラベル参照は必ずこの2つを通す(識別子へのフォールバックを一元化)
 export function checkLabel(check: string): string {
@@ -56,7 +66,8 @@ export interface RepoSummary {
   reports: number;
   builds: number;
   evidence: number;
-  rejected: number;
+  unresolvedRejected: number; // 未解決の拒否(累積ではない)
+  awaitingHuman: number; // 人間確認待ちの報告
   lastEvent: GateEvent | null;
 }
 
@@ -152,6 +163,7 @@ export interface RepoDetail {
   builds: Build[];
   evidence: Evidence[];
   events: GateEvent[];
+  unresolvedRejections: GateEvent[]; // 新しい順(events と同じ向き)
 }
 
 export async function fetchJson<T>(path: string): Promise<T> {

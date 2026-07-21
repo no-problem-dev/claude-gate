@@ -1,24 +1,31 @@
 import { Card, Chip } from "@heroui/react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Evidence,
+  REPORT_GROUP_LABEL,
   REPORT_STATE_COLOR,
   REPORT_STATE_LABEL,
   Report,
+  ReportGroup,
   RepoDetail,
   VERDICT_LABEL,
   buildTitle,
   changeKindLabel,
   checkLabel,
   formatTime,
+  reportGroup,
 } from "./lib";
 import { EvidenceThumb, SectionTitle } from "./BuildsTab";
 import { AcceptBadge, BuildDot, RejectBadge, Time } from "./components";
 import { eventSentence } from "./lib";
 
 // 完了報告タブ: この仕組みの主役オブジェクト。
+// 状態グループで並べる(人間確認待ち → 提出待ち → 進行中 → 終着)。「今、誰の番か」が先、個々のカードが後。
+// 終着(提出済み)は既定で畳む — 終わったものが今の作業と同格に並ばない。
 // カバレッジ表 = 動作ごとに「変更の種類 / 確かめ方 / 証拠 / 判定」(K-1 の人間向け表示)。
 // 判定の reason(不合格の理由・確認できずの代替手段)は人間向けの出口なので動作の行に出す
+
+const GROUP_ORDER: ReportGroup[] = ["awaiting_human", "awaiting_submit", "active", "terminal"];
 
 export function ReportsTab({
   detail,
@@ -31,6 +38,23 @@ export function ReportsTab({
   onOpenEvidence: (evidenceId: string) => void;
   onOpenBuild: (buildId: string) => void;
 }) {
+  const groups = useMemo(
+    () =>
+      GROUP_ORDER.map((group) => ({
+        group,
+        reports: detail.reports.filter((r) => reportGroup(r.state) === group),
+      })).filter((g) => g.reports.length > 0),
+    [detail.reports],
+  );
+
+  const [showTerminal, setShowTerminal] = useState(false);
+  const focusInTerminal =
+    focusReportId !== null &&
+    detail.reports.some((r) => r.reportId === focusReportId && reportGroup(r.state) === "terminal");
+  useEffect(() => {
+    if (focusInTerminal) setShowTerminal(true);
+  }, [focusInTerminal]);
+
   if (detail.reports.length === 0) {
     return (
       <div className="p-6 text-sm">
@@ -42,9 +66,9 @@ export function ReportsTab({
     );
   }
 
-  return (
+  const renderCards = (reports: Report[]) => (
     <div className="grid gap-4">
-      {detail.reports.map((report) => (
+      {reports.map((report) => (
         <ReportCard
           key={report.reportId}
           report={report}
@@ -54,6 +78,33 @@ export function ReportsTab({
           onOpenBuild={onOpenBuild}
         />
       ))}
+    </div>
+  );
+
+  return (
+    <div className="grid gap-2">
+      {groups.map(({ group, reports }) =>
+        group === "terminal" ? (
+          <section key={group}>
+            <button
+              className="mt-3 flex w-full cursor-pointer items-center gap-2 rounded-lg px-1 py-1.5 text-left text-xs font-semibold tracking-widest text-zinc-500 uppercase transition-colors hover:bg-black/4 dark:text-zinc-400 dark:hover:bg-white/5"
+              aria-expanded={showTerminal}
+              onClick={() => setShowTerminal((v) => !v)}
+            >
+              <span aria-hidden>{showTerminal ? "▾" : "▸"}</span>
+              {REPORT_GROUP_LABEL.terminal} {reports.length}件(提出済み)
+            </button>
+            {showTerminal && <div className="mt-2">{renderCards(reports)}</div>}
+          </section>
+        ) : (
+          <section key={group}>
+            <h3 className="mt-3 mb-2 px-1 text-xs font-semibold tracking-widest text-zinc-500 uppercase dark:text-zinc-400">
+              {REPORT_GROUP_LABEL[group]} {reports.length}件
+            </h3>
+            {renderCards(reports)}
+          </section>
+        ),
+      )}
     </div>
   );
 }

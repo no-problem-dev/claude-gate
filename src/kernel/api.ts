@@ -1,6 +1,8 @@
 import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { checkRunHeadline } from "../ios/log_summary.js";
+import { reportGroup } from "../ios/words.js";
+import { unresolvedRejections } from "./attention.js";
 import { gateHome, readJson } from "./store.js";
 import type { Build, Evidence, Report } from "../ios/words.js";
 
@@ -35,7 +37,8 @@ export interface RepoSummary {
   reports: number;
   builds: number;
   evidence: number;
-  rejected: number;
+  unresolvedRejected: number; // 未解決の拒否の件数(累積ではない。解消済みの拒否は監査ログの過去記録)
+  awaitingHuman: number; // 人間確認待ちの報告の件数
   lastEvent: GateEvent | null;
 }
 
@@ -47,6 +50,7 @@ export interface RepoDetail {
   builds: Build[];
   evidence: EvidenceView[];
   events: GateEvent[];
+  unresolvedRejections: GateEvent[]; // 新しい順(events と同じ向き)
 }
 
 // テキストファイルの末尾 maxBytes だけ読む(テストログは大きくなり得る。サマリ行は末尾にある)
@@ -99,15 +103,17 @@ export function overview(): { repos: RepoSummary[] } {
   const repos = Object.entries(registry).map(([repoKey, entry]) => {
     const repoDir = join(gateHome(), "repos", repoKey);
     const events = readEvents(repoDir, 500);
+    const reports = readRecords<Report>(join(repoDir, "reports"));
     return {
       repoKey,
       name: repoName(entry.commonDir),
       commonDir: entry.commonDir,
       lastSeenAt: entry.lastSeenAt,
-      reports: readRecords<Report>(join(repoDir, "reports")).length,
+      reports: reports.length,
       builds: readRecords<Build>(join(repoDir, "builds")).length,
       evidence: readRecords<Evidence>(join(repoDir, "evidence")).length,
-      rejected: events.filter((e) => e.result === "rejected").length,
+      unresolvedRejected: unresolvedRejections(events, new Map(reports.map((r) => [r.reportId, r.state]))).length,
+      awaitingHuman: reports.filter((r) => reportGroup(r.state) === "awaiting_human").length,
       lastEvent: events.at(-1) ?? null,
     };
   });
@@ -122,6 +128,8 @@ export function repoDetail(repoKey: string): RepoDetail | null {
   const reports = readRecords<Report>(join(repoDir, "reports"));
   const builds = readRecords<Build>(join(repoDir, "builds"));
   const evidence = readRecords<Evidence>(join(repoDir, "evidence")).map(withHeadline);
+  const events = readEvents(repoDir, 200); // 時系列昇順(未解決の導出はこの向きで行う)
+  const unresolved = unresolvedRejections(events, new Map(reports.map((r) => [r.reportId, r.state])));
   reports.sort((a, b) => (a.openedAt < b.openedAt ? 1 : -1));
   builds.sort((a, b) => (a.registeredAt < b.registeredAt ? 1 : -1));
   evidence.sort((a, b) => (a.attachedAt < b.attachedAt ? 1 : -1));
@@ -132,7 +140,8 @@ export function repoDetail(repoKey: string): RepoDetail | null {
     reports,
     builds,
     evidence,
-    events: readEvents(repoDir, 200).reverse(),
+    events: events.slice().reverse(),
+    unresolvedRejections: unresolved.slice().reverse(),
   };
 }
 

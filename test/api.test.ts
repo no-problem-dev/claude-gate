@@ -62,7 +62,8 @@ describe("overview", () => {
     expect(repos[0].reports).toBe(1);
     expect(repos[0].builds).toBe(1);
     expect(repos[0].evidence).toBe(1);
-    expect(repos[0].rejected).toBe(0);
+    expect(repos[0].unresolvedRejected).toBe(0);
+    expect(repos[0].awaitingHuman).toBe(0);
     expect(repos[0].lastEvent).not.toBeNull();
   });
 });

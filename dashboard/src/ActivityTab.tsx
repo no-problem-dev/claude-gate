@@ -1,37 +1,44 @@
 import { Card } from "@heroui/react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { GateEvent, RepoDetail, dayLabel, eventSentence } from "./lib";
 import { AcceptBadge, BuildDot, RejectBadge, Time } from "./components";
 
 // できごとタブ: 監査ログを日本語の文で。日付でセクション分けし、
 // 各行に対象オブジェクトのチップ(報告 = 作業名 / ビルド = 色ドット)を付ける。
-// 絞り込みは関心で3つだけ(オブジェクト別の絞り込みは各オブジェクトの「そのできごと」の役目)
+// 絞り込みは関心で3つだけ。既定は「節目」— 定型の受理の洪水に読む価値のある行が埋もれるから
+// (オブジェクト別の絞り込みは各オブジェクトの「そのできごと」の役目)
 
-type Filter = "all" | "rejected" | "report";
+export type ActivityFilter = "milestones" | "rejected" | "all";
 
-// 「報告の動き」= 報告というオブジェクトの一生に関わるできごと
-const REPORT_MOVES = new Set(["open_report", "judge", "submit", "report_state"]);
+// 「節目」= 報告の一生の節目(開く・判定・提出・掃除)+ 全ての拒否
+const MILESTONE_TOOLS = new Set(["open_report", "judge", "submit", "forget"]);
 
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: "all", label: "すべて" },
+const FILTERS: { key: ActivityFilter; label: string }[] = [
+  { key: "milestones", label: "節目" },
   { key: "rejected", label: "拒否だけ" },
-  { key: "report", label: "報告の動き" },
+  { key: "all", label: "すべて" },
 ];
 
 export function ActivityTab({
   detail,
+  filter,
+  onFilterChange,
   onOpenBuild,
   onOpenReport,
 }: {
   detail: RepoDetail;
+  filter: ActivityFilter;
+  onFilterChange: (filter: ActivityFilter) => void;
   onOpenBuild: (buildId: string) => void;
   onOpenReport: (reportId: string) => void;
 }) {
-  const [filter, setFilter] = useState<Filter>("all");
-
   const sections = useMemo(() => {
     const filtered = detail.events.filter((event) =>
-      filter === "all" ? true : filter === "rejected" ? event.result === "rejected" : REPORT_MOVES.has(event.tool),
+      filter === "all"
+        ? true
+        : filter === "rejected"
+          ? event.result === "rejected"
+          : event.result === "rejected" || MILESTONE_TOOLS.has(event.tool),
     );
     const byDay: { label: string; events: GateEvent[] }[] = [];
     for (const event of filtered) {
@@ -59,7 +66,7 @@ export function ActivityTab({
                 : "border-black/10 text-zinc-600 hover:bg-black/4 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
             }`}
             aria-pressed={filter === key}
-            onClick={() => setFilter(key)}
+            onClick={() => onFilterChange(key)}
           >
             {label}
           </button>

@@ -91,7 +91,8 @@ export function reportGroup(state: ReportState): ReportGroup {
 }
 
 // 未解決(unresolved): 拒否のできごとに、その後の解消が無い状態。
-// 解消 = 同じ報告のその後の成功(どのツールでも)・報告の掃除、報告に紐づかない拒否は同じツールのその後の成功。
+// 解消 = 同じ報告のその後の成功(どのツールでも)・報告の掃除・報告の終着。
+// 報告に紐づかない拒否は同じツールのその後の成功で解消。
 // 導出の本体は kernel/attention.ts(純関数)。記録は不変、注意は毎回計算する
 export const UNRESOLVED_REJECTION_LABEL = "未解決の拒否";
 

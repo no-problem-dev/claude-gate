@@ -32,7 +32,14 @@ const defaultDeps: AttachEvidenceDeps = { installedAppPath };
 export function attachEvidence(args: AttachEvidenceArgs, deps: AttachEvidenceDeps = defaultDeps): Reply<Evidence> {
   const gateDir = repoDirOf(args.worksitePath);
   const reject = (reason: string, fix: string): Reply<Evidence> => {
-    appendEvent(gateDir, { tool: "attach_evidence", result: "rejected", buildId: args.buildId, reason });
+    // 報告に関する拒否は報告に紐づけて記録する(注意の導出が「同じ報告のその後の成功」で解消を判定できるように)
+    appendEvent(gateDir, {
+      tool: "attach_evidence",
+      result: "rejected",
+      buildId: args.buildId,
+      reportId: args.reportId,
+      reason,
+    });
     return { status: "rejected", reason, fix, nextSteps: ["register_build", "attach_evidence"] };
   };
 

@@ -1,10 +1,18 @@
 import { Chip, Tabs } from "@heroui/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RepoDetail, RepoSummary, fetchJson } from "./lib";
+import {
+  REPORT_GROUP_LABEL,
+  RepoDetail,
+  RepoSummary,
+  UNRESOLVED_REJECTION_LABEL,
+  eventSentence,
+  fetchJson,
+  reportGroup,
+} from "./lib";
 import { Time } from "./components";
 import { BuildsTab } from "./BuildsTab";
 import { EvidenceTab } from "./EvidenceTab";
-import { ActivityTab } from "./ActivityTab";
+import { ActivityFilter, ActivityTab } from "./ActivityTab";
 import { GuideView } from "./GuideView";
 import { Lightbox } from "./Lightbox";
 import { ReportsTab } from "./ReportsTab";
@@ -22,6 +30,7 @@ export function App() {
   const [selectedBuildId, setSelectedBuildId] = useState<string | null>(null);
   const [focusReportId, setFocusReportId] = useState<string | null>(null);
   const [lightboxEvidenceId, setLightboxEvidenceId] = useState<string | null>(null);
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("milestones");
   const [daemonOk, setDaemonOk] = useState(true);
   const [view, setView] = useState<View>("state");
 
@@ -91,6 +100,7 @@ export function App() {
     setSelectedBuildId(null);
     setFocusReportId(null);
     setLightboxEvidenceId(null);
+    setActivityFilter("milestones");
     const summary = repos?.find((r) => r.repoKey === repoKey);
     setTab(summary !== undefined && summary.reports > 0 ? "reports" : "builds");
   };
@@ -110,7 +120,7 @@ export function App() {
   };
 
   const lightboxEvidence = detail?.evidence.find((e) => e.evidenceId === lightboxEvidenceId) ?? null;
-  const hasReject = detail?.events.some((e) => e.result === "rejected") ?? false;
+  const hasUnresolvedReject = (detail?.unresolvedRejections.length ?? 0) > 0;
 
   return (
     <div className="grid min-h-screen grid-cols-1 md:grid-cols-[272px_1fr]">
@@ -163,11 +173,20 @@ export function App() {
               <span className="font-semibold">{repo.name}</span>
               <Time iso={repo.lastSeenAt} />
             </div>
-            <div className="flex gap-2.5 text-xs text-zinc-600 dark:text-zinc-300">
+            <div className="flex flex-wrap gap-x-2.5 gap-y-0.5 text-xs text-zinc-600 dark:text-zinc-300">
               <span>報告 {repo.reports}</span>
               <span>ビルド {repo.builds}</span>
               <span>証拠 {repo.evidence}</span>
-              {repo.rejected > 0 && <span className="font-semibold text-red-600 dark:text-red-400">拒否 {repo.rejected}</span>}
+              {repo.unresolvedRejected > 0 && (
+                <span className="font-semibold text-red-600 dark:text-red-400">
+                  {UNRESOLVED_REJECTION_LABEL} {repo.unresolvedRejected}
+                </span>
+              )}
+              {repo.awaitingHuman > 0 && (
+                <span className="font-semibold text-amber-600 dark:text-amber-400">
+                  {REPORT_GROUP_LABEL.awaiting_human} {repo.awaitingHuman}
+                </span>
+              )}
             </div>
           </button>
         ))}
@@ -194,6 +213,15 @@ export function App() {
                 {detail.commonDir.replace(/\/\.git$/, "")}
               </p>
             </header>
+
+            <AttentionBand
+              detail={detail}
+              onOpenRejections={() => {
+                setTab("activity");
+                setActivityFilter("rejected");
+              }}
+              onOpenReports={() => setTab("reports")}
+            />
 
             <Tabs
               className="mt-4"
@@ -225,7 +253,7 @@ export function App() {
                   </Tabs.Tab>
                   <Tabs.Tab id="activity" className="whitespace-nowrap">
                     できごと
-                    <Chip color={hasReject ? "danger" : "default"} size="sm">
+                    <Chip color={hasUnresolvedReject ? "danger" : "default"} size="sm">
                       {detail.events.length}
                     </Chip>
                     <Tabs.Indicator />
@@ -252,7 +280,13 @@ export function App() {
                 <EvidenceTab detail={detail} onOpenEvidence={setLightboxEvidenceId} onOpenBuild={openBuild} />
               </Tabs.Panel>
               <Tabs.Panel id="activity" className="pt-4">
-                <ActivityTab detail={detail} onOpenBuild={openBuild} onOpenReport={openReport} />
+                <ActivityTab
+                  detail={detail}
+                  filter={activityFilter}
+                  onFilterChange={setActivityFilter}
+                  onOpenBuild={openBuild}
+                  onOpenReport={openReport}
+                />
               </Tabs.Panel>
             </Tabs>
           </>
@@ -267,6 +301,62 @@ export function App() {
           onClose={() => setLightboxEvidenceId(null)}
           onOpenBuild={openBuild}
         />
+      )}
+    </div>
+  );
+}
+
+// 注意帯: 今、人が見るべきものだけを単票の一等地に出す(docs/dashboard-design.md「注意の導出」)。
+// 無ければ何も出さない — 静けさが正常の表現
+function AttentionBand({
+  detail,
+  onOpenRejections,
+  onOpenReports,
+}: {
+  detail: RepoDetail;
+  onOpenRejections: () => void;
+  onOpenReports: () => void;
+}) {
+  const unresolved = detail.unresolvedRejections;
+  const awaitingHuman = detail.reports.filter((r) => reportGroup(r.state) === "awaiting_human").length;
+  const awaitingSubmit = detail.reports.filter((r) => reportGroup(r.state) === "awaiting_submit").length;
+  if (unresolved.length === 0 && awaitingHuman === 0 && awaitingSubmit === 0) return null;
+
+  return (
+    <div className="mt-3 grid gap-2">
+      {unresolved.length > 0 && (
+        <button
+          className="flex w-full cursor-pointer flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl border border-red-600/40 bg-red-600/8 px-3.5 py-2.5 text-left text-[13px] transition-colors hover:bg-red-600/12"
+          onClick={onOpenRejections}
+        >
+          <span className="font-semibold text-red-700 dark:text-red-300">
+            ✕ {UNRESOLVED_REJECTION_LABEL} {unresolved.length}件
+          </span>
+          <span className="min-w-0 text-zinc-600 [overflow-wrap:anywhere] dark:text-zinc-300">
+            直近: {eventSentence(unresolved[0])}
+            {unresolved[0].reason !== undefined && ` — ${unresolved[0].reason}`}
+          </span>
+        </button>
+      )}
+      {(awaitingHuman > 0 || awaitingSubmit > 0) && (
+        <div className="flex flex-wrap gap-2">
+          {awaitingHuman > 0 && (
+            <button
+              className="cursor-pointer rounded-full border border-amber-500/50 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-500/16 dark:text-amber-300"
+              onClick={onOpenReports}
+            >
+              👤 {REPORT_GROUP_LABEL.awaiting_human} {awaitingHuman}件
+            </button>
+          )}
+          {awaitingSubmit > 0 && (
+            <button
+              className="cursor-pointer rounded-full border border-black/10 px-3 py-1 text-xs font-semibold text-zinc-600 transition-colors hover:bg-black/4 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
+              onClick={onOpenReports}
+            >
+              {REPORT_GROUP_LABEL.awaiting_submit} {awaitingSubmit}件
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

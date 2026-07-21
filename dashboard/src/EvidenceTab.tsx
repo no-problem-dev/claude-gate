@@ -1,6 +1,6 @@
 import { Card } from "@heroui/react";
 import { KIND_LABEL, RepoDetail, buildTitle, evidenceCaption, evidenceIcon } from "./lib";
-import { AcceptBadge, BuildDot, NeutralChip, Time } from "./components";
+import { AcceptBadge, BuildDot, EvidenceVideo, NeutralChip, Time } from "./components";
 
 // 証拠タブ: ビルド横断のギャラリー。証拠の顔はスクショ実物と note(何が写っているか)
 
@@ -31,6 +31,11 @@ export function EvidenceTab({
                   src={fileUrl}
                   alt={item.note ?? "スクリーンショット証拠"}
                   loading="lazy"
+                />
+              ) : item.kind === "video" ? (
+                <EvidenceVideo
+                  src={fileUrl}
+                  className="max-h-64 w-full border-b border-black/8 bg-black object-contain dark:border-white/8"
                 />
               ) : (
                 <span className="grid aspect-[9/12] place-items-center text-3xl" aria-hidden>

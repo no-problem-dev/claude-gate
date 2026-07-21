@@ -1,7 +1,7 @@
 import { Card, Chip } from "@heroui/react";
 import { useMemo } from "react";
 import { Build, Evidence, RepoDetail, buildTitle, eventSentence, evidenceCaption, evidenceIcon, formatTime } from "./lib";
-import { AcceptBadge, BuildDot, DirtyChip, RejectBadge, Time } from "./components";
+import { AcceptBadge, BuildDot, DirtyChip, EvidenceVideo, RejectBadge, Time } from "./components";
 
 // ビルドタブ: マスター(一覧) ⇄ 詳細。ビルドは「何の・いつのビルドか」で名乗る(ID は二次表現)
 
@@ -186,6 +186,8 @@ export function EvidenceThumb({
           alt={item.note ?? "スクリーンショット証拠"}
           loading="lazy"
         />
+      ) : item.kind === "video" ? (
+        <EvidenceVideo src={fileUrl} className="aspect-[9/12] w-full bg-black object-contain" />
       ) : (
         <span className="grid aspect-[9/12] place-items-center text-3xl" aria-hidden>
           {evidenceIcon(item.kind)}

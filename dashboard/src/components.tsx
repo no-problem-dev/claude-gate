@@ -1,6 +1,38 @@
 import { Chip } from "@heroui/react";
-import { CSSProperties } from "react";
+import { CSSProperties, useEffect, useRef } from "react";
 import { buildHue, humanTime } from "./lib";
+
+// 録画証拠のインライン再生。autoplay はブラウザポリシー上 muted とセットでのみ許される。
+// React は muted を DOM プロパティに反映しないことがあり autoplay が弾かれるため、ref で明示設定する。
+// controls: 一覧サムネイルは false(カード全体がクリックで詳細を開くボタンなので、中に操作要素を置かない)、
+//           詳細(Lightbox)は true(手動で再生位置を操作できる)
+export function EvidenceVideo({
+  src,
+  className = "",
+  controls = false,
+}: {
+  src: string;
+  className?: string;
+  controls?: boolean;
+}) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    if (ref.current !== null) ref.current.muted = true;
+  }, []);
+  return (
+    <video
+      ref={ref}
+      className={className}
+      src={src}
+      autoPlay
+      muted
+      loop
+      playsInline
+      controls={controls}
+      preload="metadata"
+    />
+  );
+}
 
 // ビルドの色の識別点。単独で意味を持たせない(ID・見出しの併記が前提)
 export function BuildDot({ buildId, size = 10 }: { buildId: string; size?: number }) {

@@ -1,7 +1,7 @@
 import { Button } from "@heroui/react";
 import { useEffect } from "react";
 import { Build, CHECK_LABEL, Evidence, KIND_LABEL, buildTitle, evidenceCaption, evidenceIcon, formatTimeFull } from "./lib";
-import { AcceptBadge, BuildDot, NeutralChip } from "./components";
+import { AcceptBadge, BuildDot, EvidenceVideo, NeutralChip } from "./components";
 
 // 証拠のシングルビュー: 原寸スクショ + 全メタデータ + 属すビルドへのリンク
 
@@ -46,6 +46,12 @@ export function Lightbox({
               className="block max-h-[calc(100vh-64px)] max-w-full object-contain"
               src={fileUrl}
               alt={evidence.note ?? "スクリーンショット証拠"}
+            />
+          ) : evidence.kind === "video" ? (
+            <EvidenceVideo
+              className="block max-h-[calc(100vh-64px)] max-w-full bg-black object-contain"
+              src={fileUrl}
+              controls
             />
           ) : (
             <a className="p-12 text-lg" href={fileUrl} target="_blank" rel="noreferrer">

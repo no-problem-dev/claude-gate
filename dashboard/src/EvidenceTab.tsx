@@ -1,6 +1,6 @@
 import { Card } from "@heroui/react";
 import { KIND_LABEL, RepoDetail, buildTitle, evidenceCaption, evidenceIcon } from "./lib";
-import { AcceptBadge, BuildDot, EvidenceVideo, NeutralChip, Time } from "./components";
+import { AcceptBadge, BuildDot, CheckRunGlance, EvidenceVideo, NeutralChip, Time } from "./components";
 
 // 証拠タブ: ビルド横断のギャラリー。証拠の顔はスクショ実物と note(何が写っているか)
 
@@ -37,6 +37,10 @@ export function EvidenceTab({
                   src={fileUrl}
                   className="max-h-64 w-full border-b border-black/8 bg-black object-contain dark:border-white/8"
                 />
+              ) : item.kind === "check_run" ? (
+                <div className="border-b border-black/8 dark:border-white/8">
+                  <CheckRunGlance evidence={item} />
+                </div>
               ) : (
                 <span className="grid aspect-[9/12] place-items-center text-3xl" aria-hidden>
                   {evidenceIcon(item.kind)}

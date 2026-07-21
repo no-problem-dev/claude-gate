@@ -1,7 +1,19 @@
 import { Button } from "@heroui/react";
-import { useEffect } from "react";
-import { Build, CHECK_LABEL, Evidence, KIND_LABEL, buildTitle, evidenceCaption, evidenceIcon, formatTimeFull } from "./lib";
-import { AcceptBadge, BuildDot, EvidenceVideo, NeutralChip } from "./components";
+import { useEffect, useState } from "react";
+import {
+  Build,
+  CHECK_LABEL,
+  Evidence,
+  KIND_LABEL,
+  buildTitle,
+  evidenceCaption,
+  evidenceIcon,
+  formatTimeFull,
+  isErrorLogLine,
+} from "./lib";
+import { AcceptBadge, BuildDot, EvidenceVideo, ExitCodeChip, NeutralChip } from "./components";
+
+const MAX_LOG_LINES = 3000; // 巨大ログでも描画を軽く保つ。超過分は先頭を省略し末尾(失敗はここ)を見せる
 
 // 証拠のシングルビュー: 原寸スクショ + 全メタデータ + 属すビルドへのリンク
 
@@ -53,9 +65,11 @@ export function Lightbox({
               src={fileUrl}
               controls
             />
+          ) : evidence.kind === "check_run" ? (
+            <CheckRunLog url={fileUrl} exitCode={evidence.exitCode} check={evidence.check} />
           ) : (
             <a className="p-12 text-lg" href={fileUrl} target="_blank" rel="noreferrer">
-              {evidenceIcon(evidence.kind)} {evidence.kind === "check_run" ? "出力ログを開く" : "ファイルを開く"}
+              {evidenceIcon(evidence.kind)} ファイルを開く
             </a>
           )}
         </div>
@@ -120,6 +134,70 @@ export function Lightbox({
           ✕
         </Button>
       </div>
+    </div>
+  );
+}
+
+// check_run のログ全文をインライン表示する。失敗行(error: / signal / FAILED 等)は赤でハイライト。
+// ログ全文は詳細を開いたときだけ file エンドポイントから取得する(一覧では headline だけ)
+function CheckRunLog({ url, exitCode, check }: { url: string; exitCode?: number; check?: string }) {
+  const [text, setText] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setText(null);
+    setError(null);
+    fetch(url)
+      .then((res) => (res.ok ? res.text() : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((body) => alive && setText(body))
+      .catch((e) => alive && setError(String(e)));
+    return () => {
+      alive = false;
+    };
+  }, [url]);
+
+  const allLines = (text ?? "").split("\n");
+  const truncated = allLines.length > MAX_LOG_LINES;
+  const lines = truncated ? allLines.slice(allLines.length - MAX_LOG_LINES) : allLines;
+
+  return (
+    <div className="flex h-full max-h-[calc(100vh-64px)] w-full flex-col self-stretch bg-zinc-950 text-left">
+      <div className="flex items-center gap-2 border-b border-white/10 px-4 py-2.5">
+        <span aria-hidden>🧪</span>
+        <span className="text-xs font-semibold text-zinc-200">
+          {check !== undefined ? (CHECK_LABEL[check] ?? check) : "確かめ"}の出力ログ
+        </span>
+        <ExitCodeChip exitCode={exitCode} />
+        <a
+          className="ml-auto text-xs text-zinc-400 underline-offset-2 hover:text-zinc-200 hover:underline"
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+        >
+          生ログを開く
+        </a>
+      </div>
+      {error !== null ? (
+        <p className="p-4 text-sm text-red-400">ログを読めませんでした: {error}</p>
+      ) : text === null ? (
+        <p className="p-4 text-sm text-zinc-400">ログを読み込み中…</p>
+      ) : (
+        <div className="overflow-auto">
+          {truncated && (
+            <p className="px-4 py-2 text-[11px] text-amber-400">
+              先頭を省略しました(末尾 {MAX_LOG_LINES} 行を表示 / 全 {allLines.length} 行)。全体は「生ログを開く」から
+            </p>
+          )}
+          <pre className="px-4 py-3 font-mono text-[11px] leading-relaxed break-words whitespace-pre-wrap text-zinc-200">
+            {lines.map((line, i) => (
+              <div key={i} className={isErrorLogLine(line) ? "text-red-400" : undefined}>
+                {line === "" ? " " : line}
+              </div>
+            ))}
+          </pre>
+        </div>
+      )}
     </div>
   );
 }

@@ -63,6 +63,7 @@ export interface Evidence {
   exitCode?: number;
   gitSha?: string | null;
   dirty?: boolean;
+  headline?: string; // サーバーが付ける派生値: ログ末尾のサマリ一行
 }
 
 export type ReportState = "draft" | "evidenced" | "passed" | "failed" | "unconfirmed" | "submitted";
@@ -224,6 +225,14 @@ export const KIND_LABEL: Record<Evidence["kind"], string> = {
 
 export function evidenceIcon(kind: Evidence["kind"]): string {
   return kind === "video" ? "🎞" : kind === "check_run" ? "🧪" : kind === "device_report" ? "📱" : "🧩";
+}
+
+// 失敗行のハイライト判定(ログ表示用)。サーバーの src/ios/log_summary.ts ERROR_LINE_RE と 1:1
+const ERROR_LINE_RE =
+  /(\*\* (?:BUILD|TEST|CLEAN|ARCHIVE|ANALYZE|INSTALL) FAILED \*\*|\berror:|✘|unexpected signal code \d+|\bsignal (?:code )?\d+\b|Fatal error|fatalError|Segmentation fault|\bcrashed\b|with [1-9]\d* (?:issue|failure))/;
+
+export function isErrorLogLine(line: string): boolean {
+  return ERROR_LINE_RE.test(line);
 }
 
 // 証拠の一言表示: シミュレータ観測は note、確かめの記録は何をどう実行した結果か、

@@ -1,6 +1,6 @@
 import { Chip } from "@heroui/react";
 import { CSSProperties, useEffect, useRef } from "react";
-import { buildHue, humanTime } from "./lib";
+import { CHECK_LABEL, Evidence, buildHue, humanTime } from "./lib";
 
 // 録画証拠のインライン再生。autoplay はブラウザポリシー上 muted とセットでのみ許される。
 // React は muted を DOM プロパティに反映しないことがあり autoplay が弾かれるため、ref で明示設定する。
@@ -86,5 +86,41 @@ export function NeutralChip({ children }: { children: React.ReactNode }) {
     <Chip color="default" size="sm">
       {children}
     </Chip>
+  );
+}
+
+// 終了コードのバッジ: 0 = 緑(通った)/ 非0 = 赤(赤で落ちた)
+export function ExitCodeChip({ exitCode }: { exitCode?: number }) {
+  const ok = exitCode === 0;
+  return (
+    <Chip color={ok ? "success" : "danger"} size="sm" title={ok ? "終了コード 0(通った)" : `終了コード ${exitCode}(赤)`}>
+      {ok ? "✓" : "✕"} 終了コード {exitCode ?? "—"}
+    </Chip>
+  );
+}
+
+// check_run のひと目要約(一覧のプレビュー領域で使う): 確かめ方 + 終了コードバッジ + サマリ一行。
+// アイコン1文字より「何を実行して何が起きたか」が分かる
+export function CheckRunGlance({ evidence }: { evidence: Evidence }) {
+  const label = evidence.check !== undefined ? (CHECK_LABEL[evidence.check] ?? evidence.check) : "確かめ";
+  const ok = evidence.exitCode === 0;
+  return (
+    <div className="flex h-full w-full flex-col gap-2 bg-black/4 p-3.5 text-left dark:bg-white/4">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span aria-hidden>🧪</span>
+        <span className="text-xs font-semibold">{label}</span>
+        <ExitCodeChip exitCode={evidence.exitCode} />
+      </div>
+      {evidence.command !== undefined && (
+        <code className="clamp-2 font-mono text-[11px] break-all text-zinc-500 dark:text-zinc-400">
+          {evidence.command}
+        </code>
+      )}
+      {evidence.headline !== undefined && (
+        <p className={`clamp-3 font-mono text-[11px] break-all ${ok ? "" : "text-red-600 dark:text-red-400"}`}>
+          {evidence.headline}
+        </p>
+      )}
+    </div>
   );
 }

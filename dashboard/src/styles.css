@@ -19,3 +19,11 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* check_run サマリの 3 行クランプ */
+.clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

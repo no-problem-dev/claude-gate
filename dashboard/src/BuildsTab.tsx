@@ -1,7 +1,7 @@
 import { Card, Chip } from "@heroui/react";
 import { useMemo } from "react";
 import { Build, Evidence, RepoDetail, buildTitle, eventSentence, evidenceCaption, evidenceIcon, formatTime } from "./lib";
-import { AcceptBadge, BuildDot, DirtyChip, EvidenceVideo, RejectBadge, Time } from "./components";
+import { AcceptBadge, BuildDot, CheckRunGlance, DirtyChip, EvidenceVideo, RejectBadge, Time } from "./components";
 
 // ビルドタブ: マスター(一覧) ⇄ 詳細。ビルドは「何の・いつのビルドか」で名乗る(ID は二次表現)
 
@@ -188,12 +188,16 @@ export function EvidenceThumb({
         />
       ) : item.kind === "video" ? (
         <EvidenceVideo src={fileUrl} className="aspect-[9/12] w-full bg-black object-contain" />
+      ) : item.kind === "check_run" ? (
+        <CheckRunGlance evidence={item} />
       ) : (
         <span className="grid aspect-[9/12] place-items-center text-3xl" aria-hidden>
           {evidenceIcon(item.kind)}
         </span>
       )}
-      <span className="clamp-2 px-2.5 py-2 text-xs text-zinc-600 dark:text-zinc-300">{evidenceCaption(item)}</span>
+      {item.kind !== "check_run" && (
+        <span className="clamp-2 px-2.5 py-2 text-xs text-zinc-600 dark:text-zinc-300">{evidenceCaption(item)}</span>
+      )}
     </button>
   );
 }

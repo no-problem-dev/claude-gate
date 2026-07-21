@@ -1,7 +1,12 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { checkRunHeadline } from "../ios/log_summary.js";
 import { gateHome, readJson } from "./store.js";
 import type { Build, Evidence, Report } from "../ios/words.js";
+
+// 読み取りモデルの証拠は、check_run のとき派生フィールド headline(ログ末尾のサマリ一行)を足す。
+// 一覧で「何が起きたか」を追加取得なしで見せるため。ログ全文は詳細で file エンドポイントから読む
+export type EvidenceView = Evidence & { headline?: string };
 
 // ダッシュボードの読み取りモデル。ゲートの状態(~/.claude-gate)を人間向けに集約する。
 // 書き込みは一切しない: 状態を変えられるのは MCP ツールだけ。
@@ -40,8 +45,28 @@ export interface RepoDetail {
   commonDir: string;
   reports: Report[];
   builds: Build[];
-  evidence: Evidence[];
+  evidence: EvidenceView[];
   events: GateEvent[];
+}
+
+// テキストファイルの末尾 maxBytes だけ読む(テストログは大きくなり得る。サマリ行は末尾にある)
+function readTail(path: string, maxBytes = 64 * 1024): string {
+  const size = statSync(path).size;
+  if (size <= maxBytes) return readFileSync(path, "utf8");
+  const fd = openSync(path, "r");
+  try {
+    const buf = Buffer.alloc(maxBytes);
+    readSync(fd, buf, 0, maxBytes, size - maxBytes);
+    return buf.toString("utf8");
+  } finally {
+    closeSync(fd);
+  }
+}
+
+// check_run 証拠に headline(ログ末尾のサマリ一行)を付ける。他の種類はそのまま
+function withHeadline(evidence: Evidence): EvidenceView {
+  if (evidence.kind !== "check_run" || !existsSync(evidence.storedFile)) return evidence;
+  return { ...evidence, headline: checkRunHeadline(readTail(evidence.storedFile), evidence.exitCode ?? 0) };
 }
 
 // commonDir(…/repo/.git)からリポジトリ名を出す
@@ -96,7 +121,7 @@ export function repoDetail(repoKey: string): RepoDetail | null {
   const repoDir = join(gateHome(), "repos", repoKey);
   const reports = readRecords<Report>(join(repoDir, "reports"));
   const builds = readRecords<Build>(join(repoDir, "builds"));
-  const evidence = readRecords<Evidence>(join(repoDir, "evidence"));
+  const evidence = readRecords<Evidence>(join(repoDir, "evidence")).map(withHeadline);
   reports.sort((a, b) => (a.openedAt < b.openedAt ? 1 : -1));
   builds.sort((a, b) => (a.registeredAt < b.registeredAt ? 1 : -1));
   evidence.sort((a, b) => (a.attachedAt < b.attachedAt ? 1 : -1));

@@ -12,7 +12,7 @@ Claude Code セッション(対話 / 並列ワーカー / cron)… N 個
        ├─ tools: ping / open_report / register_build / attach_evidence / run_check / judge / submit
        ├─ kernel: store(状態)+ audit(監査)+ api(ダッシュボード読み取りモデル)
        ├─ subprocess: git / xcrun simctl / gate.yaml の checks コマンド
-       └─ /(ダッシュボード配信・読み取り専用)
+       └─ /(ダッシュボード配信。読み取り + 人間確認の記録 POST /api/confirm だけ)
 ```
 
 設計原則(実装に効いているものだけ):
@@ -26,7 +26,9 @@ Claude Code セッション(対話 / 並列ワーカー / cron)… N 個
 - **セッション状態を持たない**: 全ツールが対象(worksitePath 等)を明示引数で受ける。並列で何セッション繋がっても混線しない
 - **silent fallback 禁止**: 失敗は必ず rejected(reason + fix)として表面化する
 - **掃除と人間確認はエージェントの語彙に入れない**: 記録の削除は人間の CLI(`claude-gate forget`)のみ。
-  人間確認(`claude-gate confirm`)も人間だけの CLI — 「確認できず」の動作を人間が確かめた事実を証拠(kind: human_check)として記録し、自動で再判定する。人間は最上位の検証器で、機械に見えない経路(human_check 宣言・見えないこと台帳・動きの質)はこの証拠でだけ OK になる。attach_evidence の kind からは型・スキーマ両方で除外(エージェントは人間確認を偽れない)
+  人間確認は「確認できず」の動作を人間が確かめた事実を証拠(kind: human_check)として記録し、自動で再判定する。人間は最上位の検証器で、機械に見えない経路(human_check 宣言・見えないこと台帳・動きの質)はこの証拠でだけ OK になる。MCP ツール(attach_evidence の kind)からは型・スキーマ両方で除外。
+  **入口は人間の操作面2つ + 代筆**: CLI `claude-gate confirm` / ダッシュボードの確認フォーム(POST /api/confirm、監査に via: dashboard が残る)/ セッション内で人間が「確認した」と明言したときのエージェント代筆(判断者は常に人間)。3経路とも同じべき等コア(confirm.ts)に合流する。
+  正直な限界: ローカル HTTP も CLI もエージェントは技術的には呼べる(機械的遮断は不可能)。ここの防御は出所照合のような構造ではなく、語彙の境界(MCP に入れない)+ スキルの禁止 + 監査の可視性 — forget と同じ信頼層
 
 ## コード構成
 

@@ -17,6 +17,7 @@ export interface ConfirmArgs {
   report: string; // 作業名 または reportId(12桁hex)
   behaviorIndex: number;
   note: string; // 何をどう確認したか(人間確認の顔。必須)
+  via?: "dashboard"; // 入口。人間の操作面は CLI とダッシュボードの2つ(省略 = CLI)。監査で経路を見返せるように記録する
 }
 
 function resolveReport(gateDir: string, ref: string): Report | null {
@@ -32,7 +33,13 @@ function resolveReport(gateDir: string, ref: string): Report | null {
 export function confirmBehavior(args: ConfirmArgs): Reply<Report> {
   const gateDir = repoDirOf(args.worksitePath);
   const reject = (reason: string, fix: string, reportId?: string): Reply<Report> => {
-    appendEvent(gateDir, { tool: "confirm", result: "rejected", reportId, reason });
+    appendEvent(gateDir, {
+      tool: "confirm",
+      result: "rejected",
+      reportId,
+      reason,
+      ...(args.via !== undefined && { via: args.via }),
+    });
     return { status: "rejected", reason, fix, nextSteps: [] };
   };
 
@@ -84,6 +91,7 @@ export function confirmBehavior(args: ConfirmArgs): Reply<Report> {
     reportId: report.reportId,
     behaviorIndex: args.behaviorIndex,
     evidenceId,
+    ...(args.via !== undefined && { via: args.via }),
     ...(existing !== null && { alreadyAttached: true }),
     ...(link.reportState !== undefined && { reportState: link.reportState }),
     ...(link.judgmentInvalidated === true && { judgmentInvalidated: true }),

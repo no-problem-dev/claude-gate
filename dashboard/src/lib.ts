@@ -48,6 +48,7 @@ export interface GateEvent {
   state?: string; // 旧形式の独立した report_state 行のみ(新形式は reportState を原因の行が運ぶ)
   reportState?: string;
   judgmentInvalidated?: boolean;
+  via?: string; // 人間確認の入口(cli 省略 / dashboard)
   check?: string;
   exitCode?: number;
   verdict?: string;

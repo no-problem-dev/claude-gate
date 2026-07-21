@@ -13,7 +13,8 @@ import { registerBuild } from "../ios/tools/register_build.js";
 import { runCheck } from "../ios/tools/run_check.js";
 import { submit } from "../ios/tools/submit.js";
 import { CHANGE_KINDS, CHECK_KINDS } from "../ios/words.js";
-import { evidenceFilePath, overview, repoDetail } from "./api.js";
+import { confirmBehavior } from "../ios/confirm.js";
+import { evidenceFilePath, overview, repoDetail, worksitePathOf } from "./api.js";
 
 // ゲートはマシンに1プロセス(単一プロセスなので状態の書き込みは直列)。
 // セッションごとの状態は持たない: 全ツールが対象を明示引数で受ける。
@@ -182,10 +183,49 @@ app.post("/mcp", async (req, res) => {
   await transport.handleRequest(req, res, req.body);
 });
 
-// --- ダッシュボード(人間向け・読み取り専用) ---
+// --- ダッシュボード(人間向け。読み取り + 人間確認の記録だけ) ---
 
 app.get("/api/overview", (_req, res) => {
   res.json(overview());
+});
+
+// 人間確認の記録(人間の操作面はダッシュボードと CLI の2つ。同じ confirmBehavior に合流し、べき等)。
+// エージェントの語彙(MCP)には入れない。ローカル HTTP は機械的には誰でも呼べる —
+// 防御は語彙の境界 + スキルの禁止 + 監査(via: dashboard が記録に残る)で、forget/confirm CLI と同じ信頼層
+app.post("/api/confirm", (req, res) => {
+  const { repoKey, reportId, behaviorIndex, note } = (req.body ?? {}) as Record<string, unknown>;
+  if (
+    typeof repoKey !== "string" ||
+    !/^[0-9a-f]{12}$/.test(repoKey) ||
+    typeof reportId !== "string" ||
+    !Number.isInteger(behaviorIndex) ||
+    typeof note !== "string"
+  ) {
+    res.status(400).json({
+      status: "rejected",
+      reason: "引数が足りない(repoKey / reportId / behaviorIndex / note)",
+      fix: "ダッシュボードの人間確認フォームから記録してください",
+    });
+    return;
+  }
+  const worksitePath = worksitePathOf(repoKey);
+  if (worksitePath === null) {
+    res.status(404).json({
+      status: "rejected",
+      reason: "リポジトリの実体が見つからない(台帳に無いか、ディレクトリが消えている)",
+      fix: "リポジトリのチェックアウトがあるマシンで記録してください",
+    });
+    return;
+  }
+  res.json(
+    confirmBehavior({
+      worksitePath,
+      report: reportId,
+      behaviorIndex: behaviorIndex as number,
+      note,
+      via: "dashboard",
+    }),
+  );
 });
 
 app.get("/api/repos/:repoKey", (req, res) => {

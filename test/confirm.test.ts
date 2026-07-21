@@ -72,3 +72,26 @@ describe("confirmBehavior", () => {
     expect(result.status).toBe("rejected");
   });
 });
+
+describe("confirmBehavior — 入口の記録", () => {
+  it("ダッシュボード発の記録は監査に via: dashboard が残る", async () => {
+    openHumanCheckReport();
+    const result = confirmBehavior({
+      worksitePath: worksite,
+      report: "課金フロー確認",
+      behaviorIndex: 1,
+      note: "ダッシュボードから確認",
+      via: "dashboard",
+    });
+    expect(result.status).toBe("ok");
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const reposDir = join(process.env.GATE_HOME!, "repos");
+    const repoKey = readdirSync(reposDir)[0];
+    const events = readFileSync(join(reposDir, repoKey, "events.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
+    const confirmEvent = events.find((e) => e.tool === "confirm");
+    expect(confirmEvent.via).toBe("dashboard");
+  });
+});

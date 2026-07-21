@@ -194,9 +194,11 @@ export function GuideView() {
             判定が OK / NG の2値ではなく<strong>「確認できず」を含む3値</strong>なのは、
             検証器には見えないことがあるから(例: 課金フローはシミュレータの自動操作では検証が成立しない)。
             見えないものを OK / NG に潰すと、それは嘘になる。
-            「確認できず」は人間に渡す正式な出口で、人間が自分の目で確かめたら
-            <code className="mx-1 font-mono text-xs">claude-gate confirm</code>
-            で記録する — 人間確認は証拠になり、決定論の再判定が報告を前へ進める。
+            「確認できず」は人間に渡す正式な出口で、人間が自分の目で確かめたら記録する —
+            入口は報告カードの人間確認フォーム、CLI の
+            <code className="mx-1 font-mono text-xs">claude-gate confirm</code>、
+            セッション内で「確認した」と伝えたときのエージェント代筆の3つ(判断者は常に人間)。
+            人間確認は証拠になり、決定論の再判定が報告を前へ進める。
           </p>
         </Card>
       </section>

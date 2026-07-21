@@ -33,6 +33,7 @@ export interface GateEvent {
   reportId?: string;
   reportState?: string; // 原因のできごとが運ぶ結果(報告の状態)。独立した report_state 行は書かない
   judgmentInvalidated?: boolean;
+  via?: string; // 人間確認の入口(cli 省略 / dashboard)。監査で経路を見返すための記録
   alreadyRegistered?: boolean;
   alreadyAttached?: boolean;
 }
@@ -85,6 +86,15 @@ function withHeadline(evidence: Evidence): EvidenceView {
 function repoName(commonDir: string): string {
   const dir = basename(commonDir) === ".git" ? dirname(commonDir) : commonDir;
   return basename(dir);
+}
+
+// repoKey → 作業場パス(台帳の commonDir から復元)。
+// ダッシュボード発の人間確認が、CLI と同じ confirmBehavior(worksitePath 引数)に合流するための解決
+export function worksitePathOf(repoKey: string): string | null {
+  const entry = readRegistry()[repoKey];
+  if (entry === undefined) return null;
+  const dir = basename(entry.commonDir) === ".git" ? dirname(entry.commonDir) : entry.commonDir;
+  return existsSync(dir) ? dir : null;
 }
 
 function readRegistry(): Record<string, RepoRegistryEntry> {

@@ -205,9 +205,7 @@ function ReportCard({
         </ul>
       )}
 
-      {report.state === "unconfirmed" && (
-        <ConfirmHint report={report} worksite={detail.commonDir.replace(/\/\.git$/, "")} />
-      )}
+      {report.state === "unconfirmed" && <ConfirmForm report={report} detail={detail} />}
 
       <SectionTitle>カバレッジ — 動作 × 証拠 × 判定</SectionTitle>
       <ol className="grid gap-2">
@@ -305,22 +303,98 @@ function ReportCard({
   );
 }
 
-// 人間確認待ちの解決導線: 確認できずの動作を列挙し、そのまま実行できる人間確認コマンドを添える。
-// 人間確認は人間だけの CLI 操作(証拠として記録され、自動で再判定される)— docs/dashboard-design.md「注意の導出」
-function ConfirmHint({ report, worksite }: { report: Report; worksite: string }) {
-  const targets =
-    report.judgment?.behaviors.filter((b) => b.verdict === "unconfirmed").map((b) => b.index) ?? [];
+// 人間確認待ちの解決導線: 確認できずの動作を自分の目で確かめたら、その場で人間確認を記録する。
+// 記録は証拠(kind: human_check)になり、自動で再判定される。入口は人間の操作面2つ —
+// ダッシュボードのこのフォーム(判断材料 = 証拠を見ている場所で記録する)と CLI(セッション内の代筆・端末派向け)。
+// どちらも同じべき等コアに合流するので、何度どこから記録しても状態は1つ(docs/dashboard-design.md「注意の導出」)
+function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail }) {
+  const targets = report.judgment?.behaviors.filter((b) => b.verdict === "unconfirmed").map((b) => b.index) ?? [];
+  const [selected, setSelected] = useState<number | null>(null);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [outcome, setOutcome] = useState<string | null>(null);
+
   if (targets.length === 0) return null;
-  const command = `claude-gate confirm "${worksite}" --report "${report.title}" --behavior ${targets[0]} --note "確認した内容"`;
+  const target = selected !== null && targets.includes(selected) ? selected : targets[0];
+  const worksite = detail.commonDir.replace(/\/\.git$/, "");
+  const command = `claude-gate confirm "${worksite}" --report "${report.title}" --behavior ${target} --note "確認した内容"`;
+
+  const record = async () => {
+    setBusy(true);
+    setOutcome(null);
+    try {
+      const res = await fetch("/api/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repoKey: detail.repoKey,
+          reportId: report.reportId,
+          behaviorIndex: target,
+          note: note.trim(),
+        }),
+      });
+      const body = (await res.json()) as { status: string; note?: string; reason?: string };
+      if (body.status === "ok") {
+        setOutcome(`✓ ${body.note ?? "記録した"}`);
+        setNote("");
+      } else {
+        setOutcome(`✕ ${body.reason ?? "記録できなかった"}`);
+      }
+    } catch (error) {
+      setOutcome(`✕ 記録に失敗: ${String(error)}`);
+    }
+    setBusy(false);
+  };
+
   return (
-    <div className="mt-3 grid gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/8 p-3 text-[13px]">
+    <div className="mt-3 grid gap-2 rounded-xl border border-amber-500/40 bg-amber-500/8 p-3 text-[13px]">
       <p>
-        解決するには: 動作 {targets.join("・")} を自分の目で確かめ、確認できたら人間確認を記録する
-        (証拠になり、自動で再判定される)
+        解決するには: 動作を自分の目で確かめ、確認できたら人間確認を記録する(証拠になり、自動で再判定される)
       </p>
-      <code className="block font-mono text-[11.5px] break-all select-all text-zinc-600 dark:text-zinc-300">
-        {command}
-      </code>
+      {targets.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="確認する動作の選択">
+          {targets.map((index) => (
+            <button
+              key={index}
+              className={`cursor-pointer rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                index === target
+                  ? "border-amber-600/70 bg-amber-500/20 font-semibold text-amber-800 dark:text-amber-200"
+                  : "border-black/10 text-zinc-600 hover:bg-black/4 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
+              }`}
+              aria-pressed={index === target}
+              onClick={() => setSelected(index)}
+            >
+              動作{index}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          className="min-w-0 flex-1 rounded-lg border border-black/15 bg-white/70 px-2.5 py-1.5 text-[13px] outline-none focus:border-amber-600/70 dark:border-white/15 dark:bg-white/5"
+          placeholder={`動作${target}を何でどう確認したか(記録の顔になる)`}
+          value={note}
+          disabled={busy}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && note.trim() !== "" && !busy) void record();
+          }}
+        />
+        <button
+          className="cursor-pointer rounded-lg border border-amber-600/60 bg-amber-500/15 px-3 py-1.5 text-[13px] font-semibold text-amber-800 transition-colors hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-200"
+          disabled={busy || note.trim() === ""}
+          onClick={() => void record()}
+        >
+          {busy ? "記録中…" : `動作${target}を確認した`}
+        </button>
+      </div>
+      {outcome !== null && <p className="text-[12.5px] [overflow-wrap:anywhere]">{outcome}</p>}
+      <details>
+        <summary className="cursor-pointer text-xs text-zinc-500 dark:text-zinc-400">CLI で記録するなら</summary>
+        <code className="mt-1 block font-mono text-[11.5px] break-all select-all text-zinc-600 dark:text-zinc-300">
+          {command}
+        </code>
+      </details>
     </div>
   );
 }

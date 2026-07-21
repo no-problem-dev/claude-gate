@@ -1,5 +1,4 @@
 import { join } from "node:path";
-import { appendEvent } from "../kernel/audit.js";
 import { readJson, writeJson } from "../kernel/store.js";
 import type { Report } from "./words.js";
 
@@ -34,6 +33,14 @@ export function validateLink(
   return null;
 }
 
+// 紐づけの結果。状態の変化はできごとを書かず、原因のできごと(attach_evidence / run_check)が運ぶ —
+// 独立した report_state 行は因果の逆順と二重記録を生むのでやめた(docs/dashboard-design.md「できごとタブの構造」)
+export interface LinkResult {
+  note: string;
+  reportState?: "evidenced"; // 紐づけで報告の状態が動いたときだけ
+  judgmentInvalidated?: true; // 判定済みの報告に証拠が増えて判定を無効化したときだけ
+}
+
 // 受理済みの証拠を報告の動作に紐づける。同じ紐づけはべき等。
 // 最初の証拠で 下書き → 証拠あり に移す。判定済みの報告に証拠が増えたら 証拠あり に戻し、
 // 判定結果を消す(判定は証拠の集合に対するもの。集合が変わった時点で古い判定は無効)
@@ -43,26 +50,28 @@ export function linkToReport(
   behaviorIndex: number,
   evidenceId: string,
   buildId: string | null,
-): string {
+): LinkResult {
   const already = report.evidence.some((e) => e.evidenceId === evidenceId && e.behaviorIndex === behaviorIndex);
   if (already) {
-    return `。報告「${report.title}」の動作${behaviorIndex}には既に紐づいている`;
+    return { note: `。報告「${report.title}」の動作${behaviorIndex}には既に紐づいている` };
   }
   report.evidence.push({ evidenceId, behaviorIndex });
   if (buildId !== null && !report.buildIds.includes(buildId)) report.buildIds.push(buildId);
 
+  const result: LinkResult = { note: "" };
   let stateNote = "";
   if (report.state === "draft") {
     report.state = "evidenced";
+    result.reportState = "evidenced";
     stateNote = "(状態: 下書き → 証拠あり)";
   } else if (report.state !== "evidenced") {
     report.state = "evidenced";
     delete report.judgment;
+    result.reportState = "evidenced";
+    result.judgmentInvalidated = true;
     stateNote = "(証拠が増えたため判定は無効。状態: 証拠あり に戻した — judge で判定し直す)";
   }
   writeJson(join(gateDir, "reports", `${report.reportId}.json`), report);
-  if (stateNote !== "") {
-    appendEvent(gateDir, { tool: "report_state", result: "ok", reportId: report.reportId, state: "evidenced" });
-  }
-  return `。報告「${report.title}」の動作${behaviorIndex}に紐づけた${stateNote}`;
+  result.note = `。報告「${report.title}」の動作${behaviorIndex}に紐づけた${stateNote}`;
+  return result;
 }

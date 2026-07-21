@@ -162,6 +162,7 @@ export function submit(args: SubmitArgs): Reply<Report> {
     readiedAt: new Date().toISOString(),
   };
   writeJson(join(gateDir, "reports", `${report.reportId}.json`), report);
+  // 原因のできごとが結果(報告の状態)を運ぶ。独立した report_state 行は書かない
   appendEvent(gateDir, {
     tool: "submit",
     result: "ok",
@@ -169,7 +170,7 @@ export function submit(args: SubmitArgs): Reply<Report> {
     sha: sourceSha,
     branch,
     prNumber: pr.number,
+    reportState: "submitted",
   });
-  appendEvent(gateDir, { tool: "report_state", result: "ok", reportId: report.reportId, state: "submitted" });
   return { status: "ok", state: report, note, nextSteps: [] };
 }

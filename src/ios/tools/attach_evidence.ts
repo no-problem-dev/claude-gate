@@ -109,18 +109,20 @@ export function attachEvidence(args: AttachEvidenceArgs, deps: AttachEvidenceDep
 
   const existing = readJson<Evidence>(recordPath);
   if (existing !== null) {
-    const linkNote = report !== null ? linkToReport(gateDir, report, args.behaviorIndex!, evidenceId, build.buildId) : "";
+    const link = report !== null ? linkToReport(gateDir, report, args.behaviorIndex!, evidenceId, build.buildId) : null;
     appendEvent(gateDir, {
       tool: "attach_evidence",
       result: "ok",
       evidenceId,
       alreadyAttached: true,
       ...(report !== null && { reportId: report.reportId, behaviorIndex: args.behaviorIndex }),
+      ...(link?.reportState !== undefined && { reportState: link.reportState }),
+      ...(link?.judgmentInvalidated === true && { judgmentInvalidated: true }),
     });
     return {
       status: "ok",
       state: existing,
-      note: `既添付の証拠(添付: ${existing.attachedAt})。同じビルド・同じ観測ファイルは1件に収束する${linkNote}`,
+      note: `既添付の証拠(添付: ${existing.attachedAt})。同じビルド・同じ観測ファイルは1件に収束する${link?.note ?? ""}`,
       nextSteps: ["attach_evidence"],
     };
   }
@@ -141,18 +143,20 @@ export function attachEvidence(args: AttachEvidenceArgs, deps: AttachEvidenceDep
     ...(args.deviceUdid !== undefined && { deviceUdid: args.deviceUdid }),
   };
   writeJson(recordPath, evidence);
-  const linkNote = report !== null ? linkToReport(gateDir, report, args.behaviorIndex!, evidenceId, build.buildId) : "";
+  const link = report !== null ? linkToReport(gateDir, report, args.behaviorIndex!, evidenceId, build.buildId) : null;
   appendEvent(gateDir, {
     tool: "attach_evidence",
     result: "ok",
     evidenceId,
     buildId: build.buildId,
     ...(report !== null && { reportId: report.reportId, behaviorIndex: args.behaviorIndex }),
+    ...(link?.reportState !== undefined && { reportState: link.reportState }),
+    ...(link?.judgmentInvalidated === true && { judgmentInvalidated: true }),
   });
   return {
     status: "ok",
     state: evidence,
-    ...(linkNote !== "" && { note: linkNote.replace(/^。/, "") }),
+    ...(link !== null && link.note !== "" && { note: link.note.replace(/^。/, "") }),
     nextSteps: ["attach_evidence"],
   };
 }

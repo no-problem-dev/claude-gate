@@ -45,7 +45,9 @@ export interface GateEvent {
   evidenceId?: string;
   reportId?: string;
   behaviorIndex?: number;
-  state?: string;
+  state?: string; // 旧形式の独立した report_state 行のみ(新形式は reportState を原因の行が運ぶ)
+  reportState?: string;
+  judgmentInvalidated?: boolean;
   check?: string;
   exitCode?: number;
   verdict?: string;
@@ -173,6 +175,30 @@ export async function fetchJson<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+// 旧形式の記録では、報告の状態の変化が独立した report_state 行として書かれていた
+// (二重記録で、因果が逆順になる例もあった)。新形式は原因の行が reportState を運ぶ。
+// 旧記録は表示層で隣接する原因行(同じ報告・近接時刻)に畳む — 記録自体は書き換えない
+const STATE_CAUSE_TOOLS = new Set(["attach_evidence", "run_check", "judge", "submit"]);
+
+export function foldReportStateEvents(events: GateEvent[]): GateEvent[] {
+  const out = events.map((e) => ({ ...e }));
+  const drop = new Set<number>();
+  for (let i = 0; i < out.length; i++) {
+    const event = out[i];
+    if (event.tool !== "report_state" || event.reportId === undefined) continue;
+    for (const j of [i - 1, i + 1, i - 2, i + 2]) {
+      const host = out[j];
+      if (host === undefined || drop.has(j)) continue;
+      if (host.result !== "ok" || host.reportId !== event.reportId || !STATE_CAUSE_TOOLS.has(host.tool)) continue;
+      if (Math.abs(new Date(host.ts).getTime() - new Date(event.ts).getTime()) > 2000) continue;
+      if (host.reportState === undefined) host.reportState = event.state;
+      drop.add(i);
+      break;
+    }
+  }
+  return out.filter((_, i) => !drop.has(i));
+}
+
 const RELATIVE = new Intl.RelativeTimeFormat("ja", { numeric: "auto" });
 
 export function timeAgo(iso: string): string {
@@ -259,6 +285,16 @@ export function buildHue(buildId: string): number {
   return parseInt(buildId.slice(0, 4), 16) % 360;
 }
 
+// 原因のできごとが運ぶ結果(報告の状態の変化)を文に付記する。
+// 判定・提出は文自体が結果を含むので付けない(証拠の受理・確かめの実行だけ)
+function stateSuffix(event: GateEvent): string {
+  if (event.reportState === undefined) return "";
+  if (event.judgmentInvalidated === true) {
+    return ` → 判定は無効になり、報告は「${reportStateLabel(event.reportState)}」に戻った`;
+  }
+  return ` → 報告は「${reportStateLabel(event.reportState)}」へ`;
+}
+
 // できごとを日本語の文にする(ツールの英語名は UI に出さない)
 export function eventSentence(event: GateEvent): string {
   const again = event.alreadyRegistered || event.alreadyAttached || event.alreadyOpened ? "(既存の記録を返却)" : "";
@@ -266,14 +302,16 @@ export function eventSentence(event: GateEvent): string {
     return event.result === "ok" ? `ビルドを登録${again}` : "ビルドの登録を拒否";
   }
   if (event.tool === "attach_evidence") {
-    return event.result === "ok" ? `証拠を受理${again}` : "証拠を拒否";
+    return event.result === "ok" ? `証拠を受理${again}${stateSuffix(event)}` : "証拠を拒否";
   }
   if (event.tool === "open_report") {
     return event.result === "ok" ? `報告を開いた${again}` : "報告を開くのを拒否";
   }
   if (event.tool === "run_check") {
     const check = event.check !== undefined ? checkLabel(event.check) : "確かめ";
-    return event.result === "ok" ? `${check}を実行(終了コード ${event.exitCode})${again}` : `${check}の実行を拒否`;
+    return event.result === "ok"
+      ? `${check}を実行(終了コード ${event.exitCode})${again}${stateSuffix(event)}`
+      : `${check}の実行を拒否`;
   }
   if (event.tool === "judge") {
     return event.result === "ok" ? `判定した — ${reportStateLabel(event.verdict ?? "")}` : "判定を拒否";

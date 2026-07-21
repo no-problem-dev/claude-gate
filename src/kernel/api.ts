@@ -30,6 +30,9 @@ export interface GateEvent {
   reason?: string;
   buildId?: string;
   evidenceId?: string;
+  reportId?: string;
+  reportState?: string; // 原因のできごとが運ぶ結果(報告の状態)。独立した report_state 行は書かない
+  judgmentInvalidated?: boolean;
   alreadyRegistered?: boolean;
   alreadyAttached?: boolean;
 }

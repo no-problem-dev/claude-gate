@@ -109,7 +109,7 @@ export function runCheck(args: RunCheckArgs, deps: RunCheckDeps = defaultDeps): 
 
   const existing = readJson<Evidence>(recordPath);
   if (existing !== null) {
-    const linkNote = report !== null ? linkToReport(gateDir, report, args.behaviorIndex!, evidenceId, null) : "";
+    const link = report !== null ? linkToReport(gateDir, report, args.behaviorIndex!, evidenceId, null) : null;
     appendEvent(gateDir, {
       tool: "run_check",
       result: "ok",
@@ -118,11 +118,13 @@ export function runCheck(args: RunCheckArgs, deps: RunCheckDeps = defaultDeps): 
       exitCode: run.exitCode,
       alreadyAttached: true,
       ...(report !== null && { reportId: report.reportId, behaviorIndex: args.behaviorIndex }),
+      ...(link?.reportState !== undefined && { reportState: link.reportState }),
+      ...(link?.judgmentInvalidated === true && { judgmentInvalidated: true }),
     });
     return {
       status: "ok",
       state: existing,
-      note: `同一ソース・同一結果の確かめは既に記録済み(${existing.attachedAt})${linkNote}`,
+      note: `同一ソース・同一結果の確かめは既に記録済み(${existing.attachedAt})${link?.note ?? ""}`,
       nextSteps: ["judge"],
     };
   }
@@ -142,7 +144,7 @@ export function runCheck(args: RunCheckArgs, deps: RunCheckDeps = defaultDeps): 
     dirty,
   };
   writeJson(recordPath, evidence);
-  const linkNote = report !== null ? linkToReport(gateDir, report, args.behaviorIndex!, evidenceId, null) : "";
+  const link = report !== null ? linkToReport(gateDir, report, args.behaviorIndex!, evidenceId, null) : null;
   appendEvent(gateDir, {
     tool: "run_check",
     result: "ok",
@@ -150,11 +152,13 @@ export function runCheck(args: RunCheckArgs, deps: RunCheckDeps = defaultDeps): 
     check,
     exitCode: run.exitCode,
     ...(report !== null && { reportId: report.reportId, behaviorIndex: args.behaviorIndex }),
+    ...(link?.reportState !== undefined && { reportState: link.reportState }),
+    ...(link?.judgmentInvalidated === true && { judgmentInvalidated: true }),
   });
   return {
     status: "ok",
     state: evidence,
-    note: `終了コード ${run.exitCode}${dirty ? "(未コミット変更ありのソースで実行)" : ""}${linkNote}`,
+    note: `終了コード ${run.exitCode}${dirty ? "(未コミット変更ありのソースで実行)" : ""}${link?.note ?? ""}`,
     nextSteps: ["judge"],
   };
 }

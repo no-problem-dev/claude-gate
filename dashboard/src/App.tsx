@@ -7,6 +7,7 @@ import {
   UNRESOLVED_REJECTION_LABEL,
   eventSentence,
   fetchJson,
+  foldReportStateEvents,
   reportGroup,
 } from "./lib";
 import { Time } from "./components";
@@ -69,7 +70,8 @@ export function App() {
     const load = async () => {
       try {
         const data = await fetchJson<RepoDetail>(`/api/repos/${selectedRepoKey}`);
-        if (!cancelled) setDetail(data);
+        // 旧形式の report_state 行は受信時に原因行へ畳む(以後の全ビューが畳んだ形を見る)
+        if (!cancelled) setDetail({ ...data, events: foldReportStateEvents(data.events) });
       } catch {
         if (!cancelled) setDetail(null);
       }

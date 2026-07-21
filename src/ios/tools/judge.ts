@@ -62,8 +62,14 @@ export function judge(args: JudgeArgs): Reply<Report> {
   report.judgment = { ...result, judgedAt: new Date().toISOString() };
   report.state = result.verdict;
   writeJson(join(gateDir, "reports", `${report.reportId}.json`), report);
-  appendEvent(gateDir, { tool: "judge", result: "ok", reportId: report.reportId, verdict: result.verdict });
-  appendEvent(gateDir, { tool: "report_state", result: "ok", reportId: report.reportId, state: result.verdict });
+  // 原因のできごとが結果(報告の状態)を運ぶ。独立した report_state 行は書かない
+  appendEvent(gateDir, {
+    tool: "judge",
+    result: "ok",
+    reportId: report.reportId,
+    verdict: result.verdict,
+    reportState: result.verdict,
+  });
 
   const okCount = result.behaviors.filter((b) => b.verdict === "ok").length;
   const noteBase = `判定: ${VERDICT_LABEL[result.verdict]}(OK ${okCount}/${report.behaviors.length})`;

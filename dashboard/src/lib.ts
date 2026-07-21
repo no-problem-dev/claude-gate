@@ -102,6 +102,7 @@ export interface Evidence {
   gitSha?: string | null;
   dirty?: boolean;
   headline?: string; // サーバーが付ける派生値: ログ末尾のサマリ一行
+  usedBy?: { reportId: string; reportTitle: string; behaviorIndex: number }[]; // 帰属の逆引き(どの報告のどの動作を覆うか)
 }
 
 export interface BehaviorEntry {

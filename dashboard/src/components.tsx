@@ -2,10 +2,11 @@ import { Chip } from "@heroui/react";
 import { CSSProperties, useEffect, useRef } from "react";
 import { Evidence, buildHue, checkLabel, humanTime } from "./lib";
 
-// 録画証拠のインライン再生。autoplay はブラウザポリシー上 muted とセットでのみ許される。
-// React は muted を DOM プロパティに反映しないことがあり autoplay が弾かれるため、ref で明示設定する。
-// controls: 一覧サムネイルは false(カード全体がクリックで詳細を開くボタンなので、中に操作要素を置かない)、
-//           詳細(Lightbox)は true(手動で再生位置を操作できる)
+// 録画証拠の表示。
+// サムネイル(controls=false): 先頭フレームの静止表示。自動再生しない(黒画面のカードが並ぶのを防ぐ。
+//   loadedmetadata 直後に僅かにシークして最初のフレームを確実に描画させる)。▶ の目印を重ねる
+// 詳細(Lightbox, controls=true): 自動再生 + 操作可。autoplay はブラウザポリシー上 muted とセットでのみ
+//   許され、React は muted を DOM プロパティに反映しないことがあるため ref で明示設定する
 export function EvidenceVideo({
   src,
   className = "",
@@ -19,18 +20,26 @@ export function EvidenceVideo({
   useEffect(() => {
     if (ref.current !== null) ref.current.muted = true;
   }, []);
+  if (controls) {
+    return <video ref={ref} className={className} src={src} autoPlay muted loop playsInline controls preload="metadata" />;
+  }
   return (
-    <video
-      ref={ref}
-      className={className}
-      src={src}
-      autoPlay
-      muted
-      loop
-      playsInline
-      controls={controls}
-      preload="metadata"
-    />
+    <span className="relative block">
+      <video
+        ref={ref}
+        className={className}
+        src={src}
+        muted
+        playsInline
+        preload="metadata"
+        onLoadedMetadata={(e) => {
+          e.currentTarget.currentTime = 0.001;
+        }}
+      />
+      <span aria-hidden className="absolute inset-0 grid place-items-center">
+        <span className="grid size-9 place-items-center rounded-full bg-black/55 text-sm text-white">▶</span>
+      </span>
+    </span>
   );
 }
 

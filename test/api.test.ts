@@ -81,6 +81,16 @@ describe("repoDetail", () => {
     expect(detail.events.length).toBeGreaterThan(0);
   });
 
+  it("証拠に帰属の逆引き(どの報告のどの動作を覆うか)が付く", () => {
+    const { repoKey, evidenceId } = populate();
+    const detail = repoDetail(repoKey);
+    if (detail === null) throw new Error("expected detail");
+    const item = detail.evidence.find((e) => e.evidenceId === evidenceId);
+    expect(item?.usedBy).toEqual([
+      { reportId: detail.reports[0].reportId, reportTitle: "あいさつ表示", behaviorIndex: 1 },
+    ]);
+  });
+
   it("未知の repoKey は null", () => {
     expect(repoDetail("ffffffffffff")).toBeNull();
   });

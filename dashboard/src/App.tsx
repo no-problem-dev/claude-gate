@@ -277,7 +277,12 @@ export function App() {
                 />
               </Tabs.Panel>
               <Tabs.Panel id="evidence" className="pt-4">
-                <EvidenceTab detail={detail} onOpenEvidence={setLightboxEvidenceId} onOpenBuild={openBuild} />
+                <EvidenceTab
+                  detail={detail}
+                  onOpenEvidence={setLightboxEvidenceId}
+                  onOpenBuild={openBuild}
+                  onOpenReport={openReport}
+                />
               </Tabs.Panel>
               <Tabs.Panel id="activity" className="pt-4">
                 <ActivityTab
@@ -300,6 +305,7 @@ export function App() {
           repoKey={detail.repoKey}
           onClose={() => setLightboxEvidenceId(null)}
           onOpenBuild={openBuild}
+          onOpenReport={openReport}
         />
       )}
     </div>

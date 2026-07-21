@@ -23,12 +23,14 @@ export function Lightbox({
   repoKey,
   onClose,
   onOpenBuild,
+  onOpenReport,
 }: {
   evidence: Evidence;
   build: Build | null;
   repoKey: string;
   onClose: () => void;
   onOpenBuild: (buildId: string) => void;
+  onOpenReport: (reportId: string) => void;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -79,6 +81,24 @@ export function Lightbox({
             <NeutralChip>{EVIDENCE_KIND_LABEL[evidence.kind]}</NeutralChip>
           </div>
           <p className="mt-2.5 text-[13px]">{evidenceCaption(evidence)}</p>
+
+          {evidence.usedBy !== undefined && evidence.usedBy.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {evidence.usedBy.map((use) => (
+                <button
+                  key={`${use.reportId}-${use.behaviorIndex}`}
+                  className="max-w-full cursor-pointer truncate rounded-full border border-black/10 px-2.5 py-0.5 text-xs text-zinc-600 transition-colors hover:border-blue-500 hover:text-blue-600 dark:border-white/10 dark:text-zinc-300 dark:hover:text-blue-400"
+                  title={`報告「${use.reportTitle}」の動作${use.behaviorIndex}を覆う証拠。クリックで報告へ`}
+                  onClick={() => {
+                    onOpenReport(use.reportId);
+                    onClose();
+                  }}
+                >
+                  {use.reportTitle} · 動作{use.behaviorIndex}
+                </button>
+              ))}
+            </div>
+          )}
 
           {build !== null && evidence.buildId !== undefined && (
             <button

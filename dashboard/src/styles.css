@@ -12,6 +12,14 @@
   flex-shrink: 0;
 }
 
+/* 確かめの記録リスト行の 1 行クランプ */
+.clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* 証拠サムネイルのノート 2 行クランプ */
 .clamp-2 {
   display: -webkit-box;

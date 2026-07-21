@@ -6,9 +6,14 @@ import { unresolvedRejections } from "./attention.js";
 import { gateHome, readJson } from "./store.js";
 import type { Build, Evidence, Report } from "../ios/words.js";
 
-// 読み取りモデルの証拠は、check_run のとき派生フィールド headline(ログ末尾のサマリ一行)を足す。
-// 一覧で「何が起きたか」を追加取得なしで見せるため。ログ全文は詳細で file エンドポイントから読む
-export type EvidenceView = Evidence & { headline?: string };
+// 読み取りモデルの証拠は派生フィールドを足す:
+// - headline(check_run のみ): ログ末尾のサマリ一行。一覧で「何が起きたか」を追加取得なしで見せる
+// - usedBy: 帰属の逆引き(どの報告のどの動作を覆う証拠か)。参照は報告→証拠の片方向だが、
+//   人間は証拠から文脈(何のための観測か)を復元したい
+export type EvidenceView = Evidence & {
+  headline?: string;
+  usedBy?: { reportId: string; reportTitle: string; behaviorIndex: number }[];
+};
 
 // ダッシュボードの読み取りモデル。ゲートの状態(~/.claude-gate)を人間向けに集約する。
 // 書き込みは一切しない: 状態を変えられるのは MCP ツールだけ。
@@ -127,7 +132,17 @@ export function repoDetail(repoKey: string): RepoDetail | null {
   const repoDir = join(gateHome(), "repos", repoKey);
   const reports = readRecords<Report>(join(repoDir, "reports"));
   const builds = readRecords<Build>(join(repoDir, "builds"));
-  const evidence = readRecords<Evidence>(join(repoDir, "evidence")).map(withHeadline);
+  const usedBy = new Map<string, { reportId: string; reportTitle: string; behaviorIndex: number }[]>();
+  for (const report of reports) {
+    for (const link of report.evidence) {
+      const list = usedBy.get(link.evidenceId) ?? [];
+      list.push({ reportId: report.reportId, reportTitle: report.title, behaviorIndex: link.behaviorIndex });
+      usedBy.set(link.evidenceId, list);
+    }
+  }
+  const evidence = readRecords<Evidence>(join(repoDir, "evidence")).map(
+    (record): EvidenceView => ({ ...withHeadline(record), usedBy: usedBy.get(record.evidenceId) }),
+  );
   const events = readEvents(repoDir, 200); // 時系列昇順(未解決の導出はこの向きで行う)
   const unresolved = unresolvedRejections(events, new Map(reports.map((r) => [r.reportId, r.state])));
   reports.sort((a, b) => (a.openedAt < b.openedAt ? 1 : -1));

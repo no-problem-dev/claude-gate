@@ -184,7 +184,7 @@ async function doctor(): Promise<void> {
       list.includes("claude-gate@"),
       "Claude Code プラグイン",
       list.includes("claude-gate@") ? "導入済み(gate MCP + gate-loop スキル)" : "未導入",
-      "claude plugin install claude-gate@taniguchi-kyoichi を実行してください",
+      "claude plugin marketplace add <このリポジトリのパス> && claude plugin install claude-gate@claude-gate を実行してください",
     );
   } catch {
     check(false, "Claude Code プラグイン", "claude CLI が見つからない", "Claude Code をインストールしてください");

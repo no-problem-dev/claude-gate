@@ -107,8 +107,10 @@ export function GuideView() {
             証拠が複数ビルドやソースにまたがる報告は合格にならない(確認できず)。
           </Step>
           <Step n={8} name="提出" en="submit">
-            合格した報告の、<strong>検証されたそのソース(HEAD が判定時の sha と一致)</strong>だけを
-            git push できる。検証後にコミットが動いていたら拒否 — 「別物を見て OK」の提出版を締める。
+            共有(feature ブランチへの push・下書きPR の作成)は自由。合格した報告の、
+            <strong>検証されたそのソース(HEAD = 判定時の sha = PR の先頭)</strong>だけが
+            下書きPR をレビュー可能にできる。検証後にコミットが動いていたら拒否 —
+            「別物を見て OK」の提出版を締める。取り込み(マージ)は人間だけの操作。
             提出済みの報告は終着(証拠の追加も不可)。
           </Step>
         </ol>
@@ -164,6 +166,10 @@ export function GuideView() {
               <Word ja="ゲート" en="gate">受理を判断する常駐デーモン(この仕組みの実行実体)</Word>
               <Word ja="作業場" en="worksite">worktree + ビルド置き場 + 専用シミュレータの一式</Word>
               <Word ja="未コミット変更あり" en="dirty">どのコミットの成果物か確定できない状態</Word>
+              <Word ja="共有" en="share">feature ブランチへの push・下書きPR の作成。可逆なのでエージェントの自由領域(前提: デフォルトブランチは GitHub 側のブランチ保護で守る)</Word>
+              <Word ja="下書きPR" en="draft PR">共有の置き場。レビュー依頼は飛ばず、閉じれば戻る</Word>
+              <Word ja="提出" en="submit">合格した報告の下書きPR をレビュー可能にする(ドラフト解除)。ゲートだけの遷移</Word>
+              <Word ja="取り込み" en="merge">不可逆の採用。人間だけの操作 — エージェントの語彙に入れない</Word>
             </tbody>
           </table>
         </Card>
@@ -192,8 +198,9 @@ export function GuideView() {
             見えないこと台帳。見えない動作への OK は「確認できず」に変換され、人間に渡る
           </StatusRow>
           <StatusRow chip={<Chip size="sm" color="success">稼働中</Chip>} name="提出の一本化(スライス3)+ 掃除(2c)">
-            合格した報告の検証済みソースだけが push できる(submit)。PR 作成は次の実タスクで。
-            記録の掃除は人間の CLI(claude-gate forget)— エージェントは記録を消せない
+            共有(push・下書きPR)は自由、合格した報告の検証済みソースだけがレビュー依頼できる(submit =
+            ドラフト解除)、取り込みは人間だけ。記録の掃除は人間の CLI(claude-gate forget)—
+            エージェントは記録を消せない
           </StatusRow>
         </div>
         <h3 className="mt-6 mb-2 text-[13px] font-semibold">

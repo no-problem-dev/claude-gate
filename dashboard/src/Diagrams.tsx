@@ -153,7 +153,7 @@ export function ReportStateDiagram() {
       <Box x={360} y={22} w={104} label="合格" tone="good" />
       <line x1={464} y1={42} x2={548} y2={42} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
       <text x={506} y={32} textAnchor="middle" fontSize="10" className={inkSub}>提出する</text>
-      <Box x={552} y={22} w={120} h={44} label="提出済み" sub="push / PR 完了" />
+      <Box x={552} y={22} w={120} h={44} label="提出済み" sub="PR レビュー依頼済み" />
 
       <Box x={360} y={92} w={104} label="不合格" tone="bad" />
       <path d="M 412 132 L 412 158 L 228 158 L 228 132" fill="none" strokeWidth="1.3" strokeDasharray="4 3" className={line} markerEnd="url(#st)" />

@@ -1,0 +1,11 @@
+{
+  "name": "claude-gate",
+  "owner": { "name": "taniguchi-kyoichi" },
+  "plugins": [
+    {
+      "name": "claude-gate",
+      "source": "./",
+      "description": "AI 開発の品質ゲート: ビルドID と出所照合で「できました」に証拠を義務づける。ローカル常駐デーモンへの MCP 接続 + gate-loop スキル + 公式化ガード hook"
+    }
+  ]
+}

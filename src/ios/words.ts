@@ -134,12 +134,21 @@ export interface Judgment {
   judgedAt: string;
 }
 
+// 外に出す行為の境界線(2026-07 の再定義。人間の設計判断 — 事故由来ではなく、
+// 「下書きPR 運用 + デフォルトブランチ保護を前提に、feature ブランチへの push のリスクは極小」という判断):
+// - 共有(share): feature ブランチへの push・下書きPR(draft PR)の作成。可逆なのでエージェントの自由領域
+// - 提出(submit): 検証された報告の下書きPR をレビュー可能にする(ドラフト解除)。ゲートだけの遷移
+// - 取り込み(merge): 不可逆の採用。人間だけの操作 — エージェントの語彙に入れない(掃除 forget と同格)
+
 // 提出の記録: submit が報告に保存する(FSM の終着)
 export interface Submission {
   sha: string;
   branch: string;
   remote: string;
-  pushedAt: string;
+  prNumber?: number; // レビュー可能にした PR。旧形式(提出 = push)の記録には無い
+  prUrl?: string;
+  readiedAt?: string; // ドラフト解除の時刻
+  pushedAt?: string; // 旧形式(提出 = push)の記録のみ
 }
 
 // 完了報告: エージェントの「できました」の型。動作一覧はオープン時に固定(変えたいなら別の作業名で開く)

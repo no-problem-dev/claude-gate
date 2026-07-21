@@ -122,9 +122,22 @@ function ReportCard({
 
       {report.submission !== undefined && (
         <p className="mt-3 rounded-xl border border-green-600/30 bg-green-600/8 p-3 text-[13px]">
-          {report.submission.remote}/{report.submission.branch} へ{" "}
-          <span className="font-mono">{report.submission.sha.slice(0, 7)}</span> を push 済み(
-          {formatTime(report.submission.pushedAt)})。検証したソースと同一であることをゲートが照合した上での提出。
+          {report.submission.prNumber !== undefined ? (
+            <>
+              <a href={report.submission.prUrl} target="_blank" rel="noreferrer" className="underline">
+                PR #{report.submission.prNumber}
+              </a>
+              (先頭 <span className="font-mono">{report.submission.sha.slice(0, 7)}</span>)をレビュー可能にした(
+              {formatTime(report.submission.readiedAt ?? "")})。検証したソース = HEAD = PR
+              先頭であることをゲートが照合した上での提出。取り込みは人間の操作。
+            </>
+          ) : (
+            <>
+              {report.submission.remote}/{report.submission.branch} へ{" "}
+              <span className="font-mono">{report.submission.sha.slice(0, 7)}</span> を push 済み(
+              {formatTime(report.submission.pushedAt ?? "")})。旧形式(提出 = push)の記録。
+            </>
+          )}
         </p>
       )}
 

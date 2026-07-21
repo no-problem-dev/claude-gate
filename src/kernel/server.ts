@@ -149,7 +149,7 @@ function newServer(): McpServer {
     "submit",
     {
       description:
-        "提出する。合格した報告の、検証されたそのソース(sourceSha = HEAD)だけを git push origin HEAD する。合格していない報告・検証後にコミットが動いた状態では提出できない。提出済みの報告は終着(証拠の追加も不可)",
+        "提出する。合格した報告の、検証されたそのソース(sourceSha = HEAD = PR 先頭)の下書きPR をレビュー可能にする(git push origin HEAD + ドラフト解除)。共有(feature ブランチへの push・下書きPR の作成)は自由、取り込み(merge)は人間だけ。合格していない報告・検証後にコミットが動いた状態・PR が無い状態では提出できない。提出済みの報告は終着(証拠の追加も不可)",
       inputSchema: {
         worksitePath: z.string().describe("作業場(worktree)のパス"),
         reportId: z.string().describe("提出する報告(合格している必要がある)"),

@@ -3,12 +3,14 @@ import { join } from "node:path";
 import { appendEvent } from "../../kernel/audit.js";
 import { repoDirOf, writeJson } from "../../kernel/store.js";
 import { gitDirty, gitSha } from "../git.js";
+import { prReady, prView, resolveGh } from "../github.js";
 import { readReport } from "../report_link.js";
 import type { Reply, Report } from "../words.js";
 
-// 提出する: 合格した報告の、検証されたそのソースだけが push できる(A7 / K-5)。
-// 合格だけでは足りない — 判定が検証したソース(sourceSha)と HEAD の機械照合を通す。
-// 検証後に積んだ・巻き戻したソースの push は「別物を見て OK」の提出版として拒否する。
+// 提出する: 合格した報告の、検証されたそのソースの下書きPR だけがレビュー可能にできる(A7 / K-5)。
+// 合格だけでは足りない — 判定が検証したソース(sourceSha)と HEAD と PR 先頭の三点照合を通す。
+// 検証後に積んだ・巻き戻したソースの提出は「別物を見て OK」の提出版として拒否する。
+// 共有(feature ブランチへの push・下書きPR の作成)は自由領域、取り込み(merge)は人間だけ(words.ts の境界線)。
 
 export interface SubmitArgs {
   worksitePath: string;
@@ -38,7 +40,7 @@ export function submit(args: SubmitArgs): Reply<Report> {
     return {
       status: "ok",
       state: report,
-      note: `既提出の報告(提出: ${report.submission?.pushedAt})。push はし直さない`,
+      note: `既提出の報告(提出: ${report.submission?.readiedAt ?? report.submission?.pushedAt})。提出はし直さない`,
       nextSteps: [],
     };
   }
@@ -97,15 +99,77 @@ export function submit(args: SubmitArgs): Reply<Report> {
     ]);
   }
 
+  const gh = resolveGh();
+  if (gh === null) {
+    return reject(
+      "GitHub CLI(gh)が見つからない",
+      "gh をインストールし gh auth login を済ませてから提出し直してください",
+      ["submit"],
+    );
+  }
+  const lookup = prView(gh, args.worksitePath);
+  if (lookup.status === "none") {
+    return reject(
+      `このブランチ(${branch})の PR が無い`,
+      "gh pr create --draft で下書きPR を作ってから submit し直してください(下書きPR の作成は自由領域)",
+      ["submit"],
+    );
+  }
+  if (lookup.status === "error") {
+    return reject(
+      `gh の実行に失敗した: ${lookup.detail}`,
+      "gh auth status で認証を確認してから提出し直してください",
+      ["submit"],
+    );
+  }
+  const pr = lookup.pr;
+  if (pr.state !== "OPEN") {
+    return reject(
+      `PR #${pr.number} が${pr.state === "MERGED" ? "取り込み済み" : "閉じられている"}`,
+      "続きの作業は新しいブランチ + 下書きPR で開き直してください",
+      ["open_report"],
+    );
+  }
+  if (pr.headRefOid !== sourceSha) {
+    return reject(
+      `PR #${pr.number} の先頭(${pr.headRefOid.slice(0, 7)})が検証したソース(${sourceSha.slice(0, 7)})と違う`,
+      "PR のブランチと作業ブランチが一致しているか確認し、push の反映後に submit し直してください",
+      ["submit"],
+    );
+  }
+  let note: string;
+  if (pr.isDraft) {
+    const readied = prReady(gh, args.worksitePath, pr.number);
+    if (!readied.ok) {
+      return reject(
+        `ドラフト解除に失敗した: ${readied.detail}`,
+        "gh auth status と PR への権限を確認してから提出し直してください",
+        ["submit"],
+      );
+    }
+    note = `提出した: PR #${pr.number} をレビュー可能にした(検証したソース ${sourceSha.slice(0, 7)} = HEAD = PR 先頭)。この報告は終着 — 続きは新しい作業名で`;
+  } else {
+    note = `PR #${pr.number} は既にレビュー可能だった(照合は通っているので記録だけ残す)。この報告は終着 — 続きは新しい作業名で`;
+  }
+
   report.state = "submitted";
-  report.submission = { sha: sourceSha, branch, remote, pushedAt: new Date().toISOString() };
-  writeJson(join(gateDir, "reports", `${report.reportId}.json`), report);
-  appendEvent(gateDir, { tool: "submit", result: "ok", reportId: report.reportId, sha: sourceSha, branch });
-  appendEvent(gateDir, { tool: "report_state", result: "ok", reportId: report.reportId, state: "submitted" });
-  return {
-    status: "ok",
-    state: report,
-    note: `提出した: ${remote}/${branch} へ ${sourceSha.slice(0, 7)} を push(検証したソースと同一)。この報告は終着 — 続きは新しい作業名で`,
-    nextSteps: [],
+  report.submission = {
+    sha: sourceSha,
+    branch,
+    remote,
+    prNumber: pr.number,
+    prUrl: pr.url,
+    readiedAt: new Date().toISOString(),
   };
+  writeJson(join(gateDir, "reports", `${report.reportId}.json`), report);
+  appendEvent(gateDir, {
+    tool: "submit",
+    result: "ok",
+    reportId: report.reportId,
+    sha: sourceSha,
+    branch,
+    prNumber: pr.number,
+  });
+  appendEvent(gateDir, { tool: "report_state", result: "ok", reportId: report.reportId, state: "submitted" });
+  return { status: "ok", state: report, note, nextSteps: [] };
 }

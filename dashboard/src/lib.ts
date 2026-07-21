@@ -15,6 +15,7 @@ export interface GateEvent {
   verdict?: string;
   sha?: string;
   branch?: string;
+  prNumber?: number;
   alreadyRegistered?: boolean;
   alreadyAttached?: boolean;
   alreadyOpened?: boolean;
@@ -92,7 +93,10 @@ export interface Submission {
   sha: string;
   branch: string;
   remote: string;
-  pushedAt: string;
+  prNumber?: number; // レビュー可能にした PR。旧形式(提出 = push)の記録には無い
+  prUrl?: string;
+  readiedAt?: string;
+  pushedAt?: string; // 旧形式(提出 = push)の記録のみ
 }
 
 export interface Report {
@@ -282,7 +286,10 @@ export function eventSentence(event: GateEvent): string {
   }
   if (event.tool === "submit") {
     if (event.result !== "ok") return "提出を拒否";
-    return event.alreadySubmitted ? "提出(既提出の返却)" : `提出した — ${event.branch ?? ""} を push`;
+    if (event.alreadySubmitted) return "提出(既提出の返却)";
+    return event.prNumber !== undefined
+      ? `提出した — PR #${event.prNumber} をレビュー可能にした`
+      : `提出した — ${event.branch ?? ""} を push`;
   }
   if (event.tool === "forget") {
     return "記録を掃除(人間の操作)";

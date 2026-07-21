@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { forgetBuild, forgetEvidence, forgetRepo, forgetReport, resolveRepoKey } from "../src/kernel/forget.js";
+import { gateHome, readJson, writeJson } from "../src/kernel/store.js";
+import { confirmBehavior } from "../src/ios/confirm.js";
+import type { Report } from "../src/ios/words.js";
 import { attachEvidence } from "../src/ios/tools/attach_evidence.js";
 import { openReport } from "../src/ios/tools/open_report.js";
 import { registerBuild } from "../src/ios/tools/register_build.js";
@@ -107,5 +110,50 @@ describe("forget", () => {
     expect(repoKey in registry).toBe(false);
     expect(forgetRepo(repoKey).status).toBe("already-gone");
     expect(forgetBuild(repoKey, "000000000000").status).toBe("already-gone");
+  });
+});
+
+describe("forgetEvidence — 人間確認の取り消し", () => {
+  function confirmedReport(title: string) {
+    openReport({
+      worksitePath: worksite,
+      title,
+      behaviors: [{ behavior: "購入が完了する", change_kind: "system", check: "human_check" }],
+    });
+    const confirmed = confirmBehavior({ worksitePath: worksite, report: title, behaviorIndex: 1, note: "確認" });
+    if (confirmed.status !== "ok") throw new Error("expected ok");
+    return confirmed.state;
+  }
+
+  it("参照されている人間確認は取り消せる(紐づけを外し、判定を無効化して戻す)", () => {
+    const state = confirmedReport("取り消しテスト");
+    expect(state.state).toBe("passed");
+    const repoKey = repoKeyOf();
+
+    const outcome = forgetEvidence(repoKey, state.evidence[0].evidenceId);
+    expect(outcome.status).toBe("removed");
+    const reportPath = join(gateHome(), "repos", repoKey, "reports", `${state.reportId}.json`);
+    const report = readJson<Report>(reportPath)!;
+    expect(report.state).toBe("draft"); // 残りの証拠が無いので下書きへ
+    expect(report.evidence).toHaveLength(0);
+    expect(report.judgment).toBeUndefined();
+  });
+
+  it("提出済みの報告の根拠になっている人間確認は取り消せない(終着は変わらない)", () => {
+    const state = confirmedReport("終着テスト");
+    const repoKey = repoKeyOf();
+    const reportPath = join(gateHome(), "repos", repoKey, "reports", `${state.reportId}.json`);
+    const report = readJson<Report>(reportPath)!;
+    report.state = "submitted";
+    writeJson(reportPath, report);
+
+    const outcome = forgetEvidence(repoKey, state.evidence[0].evidenceId);
+    expect(outcome.status).toBe("refused");
+  });
+
+  it("機械の観測は参照されている限り今までどおり消せない", () => {
+    const { repoKey, evidenceId } = populate();
+    const outcome = forgetEvidence(repoKey, evidenceId);
+    expect(outcome.status).toBe("refused");
   });
 });

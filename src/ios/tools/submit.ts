@@ -15,6 +15,7 @@ import type { Reply, Report } from "../words.js";
 export interface SubmitArgs {
   worksitePath: string;
   reportId: string;
+  via?: "dashboard"; // 入口。人間がダッシュボードから提出する場合(省略 = MCP ツール経由)。監査で経路を見返せる
 }
 
 const STATE_FIX: Record<string, string> = {
@@ -27,7 +28,13 @@ const STATE_FIX: Record<string, string> = {
 export function submit(args: SubmitArgs): Reply<Report> {
   const gateDir = repoDirOf(args.worksitePath);
   const reject = (reason: string, fix: string, nextSteps: string[]): Reply<Report> => {
-    appendEvent(gateDir, { tool: "submit", result: "rejected", reportId: args.reportId, reason });
+    appendEvent(gateDir, {
+      tool: "submit",
+      result: "rejected",
+      reportId: args.reportId,
+      reason,
+      ...(args.via !== undefined && { via: args.via }),
+    });
     return { status: "rejected", reason, fix, nextSteps };
   };
 
@@ -36,7 +43,13 @@ export function submit(args: SubmitArgs): Reply<Report> {
     return reject(`報告 ${args.reportId} が未オープン`, "先に open_report で報告を開いてください", ["open_report"]);
   }
   if (report.state === "submitted") {
-    appendEvent(gateDir, { tool: "submit", result: "ok", reportId: report.reportId, alreadySubmitted: true });
+    appendEvent(gateDir, {
+      tool: "submit",
+      result: "ok",
+      reportId: report.reportId,
+      alreadySubmitted: true,
+      ...(args.via !== undefined && { via: args.via }),
+    });
     return {
       status: "ok",
       state: report,
@@ -171,6 +184,7 @@ export function submit(args: SubmitArgs): Reply<Report> {
     branch,
     prNumber: pr.number,
     reportState: "submitted",
+    ...(args.via !== undefined && { via: args.via }),
   });
   return { status: "ok", state: report, note, nextSteps: [] };
 }

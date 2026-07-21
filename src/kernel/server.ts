@@ -228,6 +228,30 @@ app.post("/api/confirm", (req, res) => {
   );
 });
 
+// 提出(人間がダッシュボードから)。条件はエージェント経由と同一 —
+// submit ツール自身が 合格・クリーン・sourceSha = HEAD = PR 先頭 の照合を行う(入口が違うだけで門は同じ)
+app.post("/api/submit", (req, res) => {
+  const { repoKey, reportId } = (req.body ?? {}) as Record<string, unknown>;
+  if (typeof repoKey !== "string" || !/^[0-9a-f]{12}$/.test(repoKey) || typeof reportId !== "string") {
+    res.status(400).json({
+      status: "rejected",
+      reason: "引数が足りない(repoKey / reportId)",
+      fix: "ダッシュボードの提出ボタンから実行してください",
+    });
+    return;
+  }
+  const worksitePath = worksitePathOf(repoKey);
+  if (worksitePath === null) {
+    res.status(404).json({
+      status: "rejected",
+      reason: "リポジトリの実体が見つからない(台帳に無いか、ディレクトリが消えている)",
+      fix: "リポジトリのチェックアウトがあるマシンで提出してください",
+    });
+    return;
+  }
+  res.json(submit({ worksitePath, reportId, via: "dashboard" }));
+});
+
 app.get("/api/repos/:repoKey", (req, res) => {
   const detail = repoDetail(req.params.repoKey);
   if (detail === null) {

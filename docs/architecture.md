@@ -12,7 +12,7 @@ Claude Code セッション(対話 / 並列ワーカー / cron)… N 個
        ├─ tools: ping / open_report / register_build / attach_evidence / run_check / judge / submit
        ├─ kernel: store(状態)+ audit(監査)+ api(ダッシュボード読み取りモデル)
        ├─ subprocess: git / xcrun simctl / gate.yaml の checks コマンド
-       └─ /(ダッシュボード配信。読み取り + 人間確認の記録 POST /api/confirm だけ)
+       └─ /(ダッシュボード配信。読み取り + 人間の操作2つ: POST /api/confirm・/api/submit。必ず確認ダイアログ経由)
 ```
 
 設計原則(実装に効いているものだけ):

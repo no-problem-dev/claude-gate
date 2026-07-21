@@ -15,6 +15,7 @@ import {
 } from "./lib";
 import {
   AcceptBadge,
+  ActionDialog,
   BuildLink,
   EvidenceThumb,
   ExpandableText,
@@ -206,6 +207,7 @@ function ReportCard({
       )}
 
       {report.state === "unconfirmed" && <ConfirmForm report={report} detail={detail} />}
+      {report.state === "passed" && <SubmitAction report={report} detail={detail} />}
 
       <SectionTitle>カバレッジ — 動作 × 証拠 × 判定</SectionTitle>
       <ol className="grid gap-2">
@@ -312,10 +314,12 @@ function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail })
   const [selected, setSelected] = useState<number | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [outcome, setOutcome] = useState<string | null>(null);
 
   if (targets.length === 0) return null;
   const target = selected !== null && targets.includes(selected) ? selected : targets[0];
+  const behavior = report.behaviors[target - 1]?.behavior ?? "";
   const worksite = detail.commonDir.replace(/\/\.git$/, "");
   const command = `claude-gate confirm "${worksite}" --report "${report.title}" --behavior ${target} --note "確認した内容"`;
 
@@ -344,6 +348,7 @@ function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail })
       setOutcome(`✕ 記録に失敗: ${String(error)}`);
     }
     setBusy(false);
+    setDialogOpen(false);
   };
 
   return (
@@ -371,19 +376,21 @@ function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail })
       )}
       <div className="flex flex-wrap items-center gap-2">
         <input
+          id={`confirm-note-${report.reportId}`}
+          name="confirmNote"
           className="min-w-0 flex-1 rounded-lg border border-black/15 bg-white/70 px-2.5 py-1.5 text-[13px] outline-none focus:border-amber-600/70 dark:border-white/15 dark:bg-white/5"
           placeholder={`動作${target}を何でどう確認したか(記録の顔になる)`}
           value={note}
           disabled={busy}
           onChange={(e) => setNote(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && note.trim() !== "" && !busy) void record();
+            if (e.key === "Enter" && note.trim() !== "" && !busy) setDialogOpen(true);
           }}
         />
         <button
           className="cursor-pointer rounded-lg border border-amber-600/60 bg-amber-500/15 px-3 py-1.5 text-[13px] font-semibold text-amber-800 transition-colors hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-200"
           disabled={busy || note.trim() === ""}
-          onClick={() => void record()}
+          onClick={() => setDialogOpen(true)}
         >
           {busy ? "記録中…" : `動作${target}を確認した`}
         </button>
@@ -395,6 +402,88 @@ function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail })
           {command}
         </code>
       </details>
+      <ActionDialog
+        open={dialogOpen}
+        title="人間確認を記録しますか?"
+        description={
+          <>
+            報告「{report.title}」の動作{target}「{behavior}」に、
+            <br />
+            確認内容「{note.trim()}」を人間確認として記録します。
+            <br />
+            記録は証拠になり、自動で再判定されます(取り消しは claude-gate forget --evidence)。
+          </>
+        }
+        actionLabel="記録する"
+        busy={busy}
+        onConfirm={() => void record()}
+        onClose={() => setDialogOpen(false)}
+      />
+    </div>
+  );
+}
+
+// 提出待ち(合格)の解決導線: 人間がダッシュボードから提出できる。
+// 条件はエージェント経由と同一 — submit が 合格・クリーン・sourceSha = HEAD = PR 先頭 を照合する(入口が違うだけで門は同じ)
+function SubmitAction({ report, detail }: { report: Report; detail: RepoDetail }) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [outcome, setOutcome] = useState<string | null>(null);
+
+  const run = async () => {
+    setBusy(true);
+    setOutcome(null);
+    try {
+      const res = await fetch("/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repoKey: detail.repoKey, reportId: report.reportId }),
+      });
+      const body = (await res.json()) as { status: string; note?: string; reason?: string; fix?: string };
+      if (body.status === "ok") {
+        setOutcome(`✓ ${body.note ?? "提出した"}`);
+      } else {
+        setOutcome(`✕ ${body.reason ?? "提出できなかった"}${body.fix !== undefined ? ` — 直し方: ${body.fix}` : ""}`);
+      }
+    } catch (error) {
+      setOutcome(`✕ 提出に失敗: ${String(error)}`);
+    }
+    setBusy(false);
+    setDialogOpen(false);
+  };
+
+  return (
+    <div className="mt-3 grid gap-1.5 rounded-xl border border-green-600/30 bg-green-600/8 p-3 text-[13px]">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="min-w-0 flex-1">
+          合格済み。提出すると下書きPR がレビュー可能になる(検証したソース = HEAD = PR 先頭 をゲートが照合)
+        </span>
+        <button
+          className="cursor-pointer rounded-lg border border-green-700/50 bg-green-600/15 px-3 py-1.5 text-[13px] font-semibold text-green-800 transition-colors hover:bg-green-600/25 disabled:cursor-not-allowed disabled:opacity-50 dark:text-green-300"
+          disabled={busy}
+          onClick={() => setDialogOpen(true)}
+        >
+          {busy ? "提出中…" : "提出する"}
+        </button>
+      </div>
+      {outcome !== null && <p className="text-[12.5px] [overflow-wrap:anywhere]">{outcome}</p>}
+      <ActionDialog
+        open={dialogOpen}
+        title="提出しますか?"
+        description={
+          <>
+            報告「{report.title}」を提出します。
+            <br />
+            ゲートが 検証したソース = HEAD = PR 先頭 の三点照合を行い、通れば下書きPR がレビュー可能になります。
+            <br />
+            提出済みの報告は終着で、もう変わりません(取り込みは人間のマージ操作)。
+          </>
+        }
+        actionLabel="提出する"
+        busy={busy}
+        onConfirm={() => void run()}
+        onClose={() => setDialogOpen(false)}
+      />
     </div>
   );
 }

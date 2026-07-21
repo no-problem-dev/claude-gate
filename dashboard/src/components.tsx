@@ -1,4 +1,4 @@
-import { Chip } from "@heroui/react";
+import { Button, Chip } from "@heroui/react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import {
   Build,
@@ -130,6 +130,68 @@ export function ReportLink({
     >
       {label}
     </button>
+  );
+}
+
+// ---- アクションの確認ダイアログ ----
+
+// ダッシュボードの書き込みアクション(人間確認の記録・提出)は、必ずこのダイアログを挟んでから実行する。
+// ワンクリックで状態が変わると誤操作の事故が起こる — 「何が起きるか」を見せて、実行はその上で
+export function ActionDialog({
+  open,
+  title,
+  description,
+  actionLabel,
+  busy,
+  onConfirm,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  description: React.ReactNode;
+  actionLabel: string;
+  busy: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-20 grid place-items-center bg-black/45 p-6"
+      role="alertdialog"
+      aria-modal="true"
+      aria-label={title}
+      onClick={() => {
+        if (!busy) onClose();
+      }}
+    >
+      <div
+        className="bg-background w-full max-w-md rounded-2xl p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-base font-semibold">{title}</h3>
+        <div className="mt-2 text-[13px] leading-relaxed text-zinc-600 [overflow-wrap:anywhere] dark:text-zinc-300">
+          {description}
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onPress={onClose} isDisabled={busy}>
+            やめる
+          </Button>
+          <Button size="sm" onPress={onConfirm} isDisabled={busy}>
+            {busy ? "実行中…" : actionLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -84,9 +84,41 @@ export function forgetEvidence(repoKey: string, evidenceId: string): ForgetOutco
     r.evidence.some((e) => e.evidenceId === evidenceId),
   );
   if (referencedBy.length > 0) {
+    // 機械の観測(スクショ・確かめの記録 等)は事実の記録 — 参照されている限り消せない。
+    // 人間確認だけは**宣言**であり、宣言は本人が取り消せる(誤った確認を取り消す正当な操作が無い、
+    // という穴が実際の誤記録で露呈した)。ただし終着(提出済み)の報告は何があっても変わらない
+    if (record.kind !== "human_check") {
+      return {
+        status: "refused",
+        detail: `証拠 ${evidenceId} は報告 ${referencedBy.map((r) => `「${r.title}」`).join(", ")} から参照されている(先に報告を消すか、消さない)`,
+      };
+    }
+    const submitted = referencedBy.filter((r) => r.state === "submitted");
+    if (submitted.length > 0) {
+      return {
+        status: "refused",
+        detail: `人間確認 ${evidenceId} は提出済みの報告 ${submitted.map((r) => `「${r.title}」`).join(", ")} の根拠になっている(終着は変わらない)`,
+      };
+    }
+    // 紐づけを外す。証拠の集合が変わるので判定は無効(linkToReport と同じ規則)
+    for (const report of referencedBy) {
+      report.evidence = report.evidence.filter((e) => e.evidenceId !== evidenceId);
+      delete report.judgment;
+      report.state = report.evidence.length > 0 ? "evidenced" : "draft";
+      writeJson(join(dir, "reports", `${report.reportId}.json`), report);
+      appendEvent(dir, {
+        tool: "forget",
+        result: "ok",
+        evidenceId,
+        reportId: report.reportId,
+        reportState: report.state,
+      });
+    }
+    unlinkSync(recordPath);
+    if (record.storedFile !== undefined && existsSync(record.storedFile)) unlinkSync(record.storedFile);
     return {
-      status: "refused",
-      detail: `証拠 ${evidenceId} は報告 ${referencedBy.map((r) => `「${r.title}」`).join(", ")} から参照されている(先に報告を消すか、消さない)`,
+      status: "removed",
+      detail: `人間確認 ${evidenceId} を取り消した(紐づけを外し、判定を無効化。監査ログに記録)— judge で判定し直す`,
     };
   }
   unlinkSync(recordPath);

@@ -382,7 +382,7 @@ function AttentionBand({
             <ReportLink
               key={report.reportId}
               label={report.title}
-              title={`報告「${report.title}」を開く(提出はエージェントの submit)`}
+              title={`報告「${report.title}」を開く(カードの提出ボタンから提出できる)`}
               onOpen={() => onOpenReport(report.reportId)}
             />
           ))}

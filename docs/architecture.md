@@ -35,11 +35,15 @@ src/
   kernel/            # ドメイン非依存の薄い機構
     server.ts        # HTTP MCP(stateless streamable)+ ダッシュボード API/配信。ツール登録
     store.ts         # 状態の置き場の解決と JSON 読み書き
-    audit.ts         # events.jsonl への追記
-    api.ts           # ダッシュボードの読み取りモデル(overview / repoDetail / 証拠ファイル)
+    audit.ts         # events.jsonl への追記。原因のできごとが結果を運ぶ(報告の状態を動かした
+                     #   イベント自身に reportState を付記。独立した report_state 行は書かない)
+    attention.ts     # 注意の導出(純関数): 未解決の拒否・報告のグループ。記録は不変、注意は毎回計算
+    api.ts           # ダッシュボードの読み取りモデル(overview / repoDetail / 証拠ファイル)。
+                     #   導出を含む: 注意・証拠の帰属(どの報告のどの動作を覆うか)・check_run の headline
     forget.ts        # 掃除の本体(参照チェック・べき等・監査記録)
   ios/               # iOS ドメイン
-    words.ts         # 語彙の型定義(日本語の正式名と 1:1。ここにない語は使わない)
+    words.ts         # 語彙の型定義とラベル対訳(日本語の正式名と 1:1。ここにない語は使わない)。
+                     #   dashboard も同じファイルを import する — ラベルの写しを UI 側に持たない
     build_id.ts      # .app ディレクトリ → ビルドID(決定論・純関数)
     macho_uuid.ts    # 実行バイナリの LC_UUID 抽出(dwarfdump)+ セルフレポートの buildUUID 照合(実機の出所照合)
     simulator.ts     # simctl get_app_container

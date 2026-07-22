@@ -1,5 +1,6 @@
 import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { commitsBetween, gitBranch, gitSha, isAncestor } from "../ios/git.js";
 import { checkRunHeadline } from "../ios/log_summary.js";
 import { reportGroup } from "../ios/words.js";
 import { unresolvedRejections } from "./attention.js";
@@ -34,6 +35,8 @@ export interface GateEvent {
   reportState?: string; // 原因のできごとが運ぶ結果(報告の状態)。独立した report_state 行は書かない
   judgmentInvalidated?: boolean;
   via?: string; // 人間確認の入口(cli 省略 / dashboard)。監査で経路を見返すための記録
+  fromSha?: string; // 差分確認(confirm_delta)のみ
+  toSha?: string; // 差分確認(confirm_delta)のみ
   alreadyRegistered?: boolean;
   alreadyAttached?: boolean;
 }
@@ -170,6 +173,38 @@ export function repoDetail(repoKey: string): RepoDetail | null {
     evidence,
     events: events.slice().reverse(),
     unresolvedRejections: unresolved.slice().reverse(),
+  };
+}
+
+// 差分確認の判断材料: 検証したソースと作業場の HEAD のずれ(コミット一覧)。
+// 何を引き受けるのかを見せずに引き受けさせない — ダッシュボードはこれを表示してから記録する
+export type DeltaPreview =
+  | {
+      fromSha: string;
+      toSha: string;
+      branch: string | null;
+      ancestorOk: boolean; // false = rebase/巻き戻し(差分確認の対象外)
+      commits: { sha: string; subject: string }[];
+    }
+  | { error: string };
+
+export function deltaPreview(repoKey: string, reportId: string): DeltaPreview {
+  if (!/^[0-9a-f]{12}$/.test(repoKey) || !/^[0-9a-f]{12}$/.test(reportId)) return { error: "不正な ID" };
+  const worksite = worksitePathOf(repoKey);
+  if (worksite === null) return { error: "リポジトリの実体が見つからない(台帳に無いか、ディレクトリが消えている)" };
+  const report = readJson<Report>(join(gateHome(), "repos", repoKey, "reports", `${reportId}.json`));
+  if (report === null) return { error: "報告が見つからない" };
+  const fromSha = report.judgment?.sourceSha ?? null;
+  if (fromSha === null) return { error: "検証したソースが確定していない(未判定・dirty 検証・旧形式)" };
+  const toSha = gitSha(worksite);
+  if (toSha === null) return { error: "作業場の HEAD が解決できない" };
+  const ancestorOk = fromSha === toSha || isAncestor(worksite, fromSha, toSha);
+  return {
+    fromSha,
+    toSha,
+    branch: gitBranch(worksite),
+    ancestorOk,
+    commits: ancestorOk ? commitsBetween(worksite, fromSha, toSha) : [],
   };
 }
 

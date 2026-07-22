@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { confirmBehavior } from "./ios/confirm.js";
+import { confirmBehavior, confirmDelta } from "./ios/confirm.js";
+import { commitsBetween } from "./ios/git.js";
 import { initGateYaml } from "./ios/gate_init.js";
 import { forgetBuild, forgetEvidence, forgetRepo, forgetReport, resolveRepoKey } from "./kernel/forget.js";
 import { gateHome } from "./kernel/store.js";
@@ -30,6 +31,9 @@ switch (command) {
     break;
   case "confirm":
     confirm(process.argv.slice(3));
+    break;
+  case "confirm-delta":
+    confirmDeltaCommand(process.argv.slice(3));
     break;
   case "forget":
     forget(process.argv.slice(3));
@@ -74,6 +78,39 @@ function confirm(args: string[]): void {
     return;
   }
   console.log(`✓ ${result.note}`);
+}
+
+// 差分確認(人間の操作): 検証したソースの後に積まれた差分を見た上で、判定を toSha(省略 = HEAD)まで引き受ける
+function confirmDeltaCommand(args: string[]): void {
+  const [worksitePath, ...rest] = args;
+  const flags = new Map<string, string>();
+  for (let i = 0; i < rest.length; i += 2) {
+    if (rest[i]?.startsWith("--") && rest[i + 1] !== undefined) flags.set(rest[i], rest[i + 1]);
+  }
+  const report = flags.get("--report");
+  const note = flags.get("--note");
+  const to = flags.get("--to");
+  if (!worksitePath || report === undefined || note === undefined) {
+    console.log(
+      'usage: claude-gate confirm-delta <worksitePath> --report <作業名|reportId> --note "差分の何を見てどう判断したか" [--to <コミット>]',
+    );
+    process.exitCode = 1;
+    return;
+  }
+  const result = confirmDelta({ worksitePath, report, toSha: to, note });
+  if (result.status === "rejected") {
+    console.log(`✗ ${result.reason}`);
+    console.log(`  直し方: ${result.fix}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`✓ ${result.note}`);
+  const last = result.state.deltaConfirms?.at(-1);
+  if (last !== undefined) {
+    for (const commit of commitsBetween(worksitePath, last.fromSha, last.toSha)) {
+      console.log(`  ${commit.sha.slice(0, 7)} ${commit.subject}`);
+    }
+  }
 }
 
 function forget(args: string[]): void {
@@ -230,6 +267,8 @@ function help(): void {
   doctor   稼働状態を点検する(デーモン/ダッシュボード/プラグイン)
   init     カレントリポジトリに gate.yaml の雛形を作る(既存は上書きしない)
   confirm  人間確認(人間の操作): 動作を確かめた事実を証拠に記録し、自動で再判定
+  confirm-delta  差分確認(人間の操作): 検証したソースの後に積まれた差分を見た上で
+           判定を引き受け、sourceSha を先へ進める(submit の照合は変えない)
   forget   掃除(人間の操作): リポジトリの状態 / --build / --report / --evidence を削除
            参照されている記録は消せない。レコード単位の削除は監査ログに残る`);
 }

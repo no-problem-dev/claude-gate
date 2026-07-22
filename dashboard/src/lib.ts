@@ -4,6 +4,7 @@
 import {
   CHANGE_KIND_LABEL,
   CHECK_LABEL,
+  DELTA_CONFIRM_LABEL,
   EVIDENCE_KIND_LABEL,
   REPORT_GROUP_LABEL,
   REPORT_STATE_LABEL,
@@ -14,6 +15,7 @@ import {
 import type { EvidenceKind, ReportGroup, ReportState, Verdict } from "../../src/ios/words";
 
 export {
+  DELTA_CONFIRM_LABEL,
   EVIDENCE_KIND_LABEL,
   REPORT_GROUP_LABEL,
   REPORT_STATE_LABEL,
@@ -55,10 +57,14 @@ export interface GateEvent {
   sha?: string;
   branch?: string;
   prNumber?: number;
+  fromSha?: string; // 差分確認(confirm_delta)のみ
+  toSha?: string; // 差分確認(confirm_delta)のみ
+  commits?: number; // 差分確認(confirm_delta)のみ: 引き受けたコミット数
   alreadyRegistered?: boolean;
   alreadyAttached?: boolean;
   alreadyOpened?: boolean;
   alreadySubmitted?: boolean;
+  alreadyConfirmed?: boolean;
 }
 
 export interface RepoSummary {
@@ -124,8 +130,17 @@ export interface Judgment {
   verdict: "passed" | "failed" | "unconfirmed";
   behaviors: BehaviorVerdict[];
   reasons: string[];
-  sourceSha?: string | null;
+  sourceSha?: string | null; // submit が HEAD と照合する有効なソース(差分確認の連鎖を適用した先)
+  verifiedSha?: string | null; // 機械が検証したソース(差分確認が無ければ sourceSha と同じ)
   judgedAt: string;
+}
+
+// 差分確認: 検証したソースの後に積まれた差分を人間が見て、判定を引き受けた記録(src/ios/words.ts と 1:1)
+export interface DeltaConfirmation {
+  fromSha: string;
+  toSha: string;
+  note: string;
+  confirmedAt: string;
 }
 
 export interface Submission {
@@ -147,6 +162,7 @@ export interface Report {
   buildIds: string[];
   openedAt: string;
   judgment?: Judgment;
+  deltaConfirms?: DeltaConfirmation[];
   submission?: Submission;
 }
 
@@ -307,7 +323,10 @@ function stateSuffix(event: GateEvent): string {
 
 // できごとを日本語の文にする(ツールの英語名は UI に出さない)
 export function eventSentence(event: GateEvent): string {
-  const again = event.alreadyRegistered || event.alreadyAttached || event.alreadyOpened ? "(既存の記録を返却)" : "";
+  const again =
+    event.alreadyRegistered || event.alreadyAttached || event.alreadyOpened || event.alreadyConfirmed
+      ? "(既存の記録を返却)"
+      : "";
   if (event.tool === "register_build") {
     return event.result === "ok" ? `ビルドを登録${again}` : "ビルドの登録を拒否";
   }
@@ -337,6 +356,13 @@ export function eventSentence(event: GateEvent): string {
     return event.result === "ok"
       ? `人間が動作${event.behaviorIndex ?? ""}を確認した${again}${stateSuffix(event)}`
       : "人間確認を拒否";
+  }
+  if (event.tool === "confirm_delta") {
+    const range =
+      event.fromSha !== undefined && event.toSha !== undefined
+        ? `(${event.fromSha.slice(0, 7)} → ${event.toSha.slice(0, 7)})`
+        : "";
+    return event.result === "ok" ? `人間が差分を確認して引き受けた${range}${again}` : "差分確認を拒否";
   }
   if (event.tool === "forget") {
     return "記録を掃除(人間の操作)";

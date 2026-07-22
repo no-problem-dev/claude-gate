@@ -184,8 +184,24 @@ export interface Judgment {
   verdict: "passed" | "failed" | "unconfirmed";
   behaviors: BehaviorVerdict[];
   reasons: string[]; // 報告レベルの理由(ビルド混在・同一ソース不明 等)
-  sourceSha: string | null; // 検証したソース。submit が HEAD と照合する。dirty 検証は null
+  sourceSha: string | null; // submit が HEAD と照合する有効なソース(機械検証の到達点に差分確認の連鎖を適用した先)。dirty 検証は null
+  verifiedSha?: string | null; // 機械が検証したソース(差分確認が無ければ sourceSha と同じ)。旧形式の記録には無い
   judgedAt: string;
+}
+
+// 差分確認: 検証したソースの後に積まれたコミットの差分を人間が自分の目で見て、
+// 「判定は引き続き有効」と引き受ける記録。人間だけの操作(confirm / forget と同じ信頼層 —
+// エージェントの語彙(MCP)には入れない)。
+// 人間の強い権限は「照合を飛ばす」形にしない: submit の三点照合(sourceSha = HEAD = PR 先頭)は
+// そのままに、judge が差分確認の連鎖で sourceSha を先へ進める — 提出済み(検証されたソースの提出)の意味を守る。
+// 対象は fromSha が toSha の祖先である差分だけ(rebase・巻き戻しは取り直し)
+export const DELTA_CONFIRM_LABEL = "差分確認";
+
+export interface DeltaConfirmation {
+  fromSha: string; // 引き受け元(機械が検証したソース、または前の差分確認の到達点)
+  toSha: string; // 引き受け先(人間が差分を見て有効と判断したソース)
+  note: string; // 差分の何を見てどう判断したか(記録の顔。必須)
+  confirmedAt: string;
 }
 
 // 外に出す行為の境界線(2026-07 の再定義。人間の設計判断 — 事故由来ではなく、
@@ -215,6 +231,7 @@ export interface Report {
   buildIds: string[]; // 紐づいた証拠の由来ビルド(重複なし)
   openedAt: string;
   judgment?: Judgment;
+  deltaConfirms?: DeltaConfirmation[]; // 差分確認の記録(人間だけの操作)。判定はこの連鎖で sourceSha を先へ進める
   submission?: Submission;
 }
 

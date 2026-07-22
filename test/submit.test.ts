@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
+import { confirmDelta } from "../src/ios/confirm.js";
 import { attachEvidence } from "../src/ios/tools/attach_evidence.js";
 import { judge } from "../src/ios/tools/judge.js";
 import { openReport } from "../src/ios/tools/open_report.js";
@@ -246,5 +247,29 @@ describe("submit", () => {
     expect(result.status).toBe("rejected");
     if (result.status !== "rejected") throw new Error("expected rejected");
     expect(result.fix).toContain("remote");
+  });
+});
+
+describe("submit — 差分確認(人間の引き受け)との連携", () => {
+  it("検証後に積まれたコミットは提出できないが、差分確認の後は三点照合がそのまま通る", () => {
+    const reportId = passedReport();
+    writeFileSync(join(worksite, "after.txt"), "x");
+    commitAll("検証後のコミット");
+    putPr(); // PR 先頭 = 新しい HEAD
+
+    const blocked = submit({ worksitePath: worksite, reportId });
+    expect(blocked.status).toBe("rejected");
+    if (blocked.status !== "rejected") throw new Error("expected rejected");
+    expect(blocked.reason).toContain("検証したソース");
+
+    const confirmed = confirmDelta({ worksitePath: worksite, report: reportId, note: "積まれた差分を見た" });
+    expect(confirmed.status).toBe("ok");
+
+    const result = submit({ worksitePath: worksite, reportId });
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") throw new Error("expected ok");
+    expect(result.state.state).toBe("submitted");
+    expect(result.state.submission?.sha).toBe(git("rev-parse", "HEAD"));
+    expect(readPr().isDraft).toBe(false);
   });
 });

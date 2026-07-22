@@ -13,8 +13,8 @@ import { registerBuild } from "../ios/tools/register_build.js";
 import { runCheck } from "../ios/tools/run_check.js";
 import { submit } from "../ios/tools/submit.js";
 import { CHANGE_KINDS, CHECK_KINDS } from "../ios/words.js";
-import { confirmBehavior } from "../ios/confirm.js";
-import { evidenceFilePath, overview, repoDetail, worksitePathOf } from "./api.js";
+import { confirmBehavior, confirmDelta } from "../ios/confirm.js";
+import { deltaPreview, evidenceFilePath, overview, repoDetail, worksitePathOf } from "./api.js";
 
 // ゲートはマシンに1プロセス(単一プロセスなので状態の書き込みは直列)。
 // セッションごとの状態は持たない: 全ツールが対象を明示引数で受ける。
@@ -250,6 +250,47 @@ app.post("/api/submit", (req, res) => {
     return;
   }
   res.json(submit({ worksitePath, reportId, via: "dashboard" }));
+});
+
+// 差分確認の判断材料(読み取り): 検証したソースと HEAD のずれ(コミット一覧)。
+// 何を引き受けるのかを見せずに引き受けさせない
+app.get("/api/repos/:repoKey/reports/:reportId/delta", (req, res) => {
+  const preview = deltaPreview(req.params.repoKey, req.params.reportId);
+  if ("error" in preview) {
+    res.status(404).json(preview);
+    return;
+  }
+  res.json(preview);
+});
+
+// 差分確認の記録(人間の操作。confirm と同じ信頼層 — MCP には入れない・監査に via: dashboard が残る)。
+// toSha は判断材料として表示した sha をそのまま渡す(見たものと記録するものを一致させる)
+app.post("/api/confirm-delta", (req, res) => {
+  const { repoKey, reportId, toSha, note } = (req.body ?? {}) as Record<string, unknown>;
+  if (
+    typeof repoKey !== "string" ||
+    !/^[0-9a-f]{12}$/.test(repoKey) ||
+    typeof reportId !== "string" ||
+    typeof toSha !== "string" ||
+    typeof note !== "string"
+  ) {
+    res.status(400).json({
+      status: "rejected",
+      reason: "引数が足りない(repoKey / reportId / toSha / note)",
+      fix: "ダッシュボードの差分確認フォームから記録してください",
+    });
+    return;
+  }
+  const worksitePath = worksitePathOf(repoKey);
+  if (worksitePath === null) {
+    res.status(404).json({
+      status: "rejected",
+      reason: "リポジトリの実体が見つからない(台帳に無いか、ディレクトリが消えている)",
+      fix: "リポジトリのチェックアウトがあるマシンで記録してください",
+    });
+    return;
+  }
+  res.json(confirmDelta({ worksitePath, report: reportId, toSha, note, via: "dashboard" }));
 });
 
 app.get("/api/repos/:repoKey", (req, res) => {

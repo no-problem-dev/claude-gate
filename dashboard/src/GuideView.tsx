@@ -185,6 +185,7 @@ export function GuideView() {
               <Word ja="共有" en="share">feature ブランチへの push・下書きPR の作成。可逆なのでエージェントの自由領域(前提: デフォルトブランチは GitHub 側のブランチ保護で守る)</Word>
               <Word ja="下書きPR" en="draft PR">共有の置き場。レビュー依頼は飛ばず、閉じれば戻る</Word>
               <Word ja="提出" en="submit">合格した報告の下書きPR をレビュー可能にする(ドラフト解除)。ゲートだけの遷移</Word>
+              <Word ja="差分確認" en="confirm_delta">検証したソースの後に積まれた差分を人間が見て「判定は引き続き有効」と引き受ける記録。人間だけの操作 — 判定が sourceSha を先へ進め、提出の照合は変えない</Word>
               <Word ja="取り込み" en="merge">不可逆の採用。人間だけの操作 — エージェントの語彙に入れない</Word>
             </tbody>
           </table>
@@ -199,6 +200,10 @@ export function GuideView() {
             <code className="mx-1 font-mono text-xs">claude-gate confirm</code>、
             セッション内で「確認した」と伝えたときのエージェント代筆の3つ(判断者は常に人間)。
             人間確認は証拠になり、決定論の再判定が報告を前へ進める。
+            同じ考え方で、検証の後にコミットが積まれて提出が止まった報告は、
+            人間がずれた差分を見た上で<strong>差分確認</strong>(報告カードのフォーム、または CLI の
+            <code className="mx-1 font-mono text-xs">claude-gate confirm-delta</code>)で引き受けられる —
+            人間の強い権限は「照合を飛ばす」ではなく「機械に見えない判断を記録として供給する」形で行使する。
           </p>
         </Card>
       </section>

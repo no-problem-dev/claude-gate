@@ -3,6 +3,7 @@ import { writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { appendEvent } from "../kernel/audit.js";
 import { readJson, repoDirOf, writeJson } from "../kernel/store.js";
+import { commitsBetween, gitSha, isAncestor, resolveSha } from "./git.js";
 import { linkToReport, readReport, validateLink } from "./report_link.js";
 import { judge } from "./tools/judge.js";
 import type { Evidence, Reply, Report } from "./words.js";
@@ -111,6 +112,129 @@ export function confirmBehavior(args: ConfirmArgs): Reply<Report> {
     status: "ok",
     state: judged.state,
     note: `人間確認を記録した(動作${args.behaviorIndex}: ${note})。${judged.note ?? ""}`,
+    nextSteps: judged.state.state === "passed" ? ["submit"] : [],
+  };
+}
+
+// 差分確認(confirm-delta): 検証したソースの後に積まれたコミットの差分を人間が見た上で、
+// 「判定は引き続き有効」と引き受ける(人間だけの操作。信頼層は confirm / forget と同じ)。
+// submit の三点照合は変えない — 記録後の自動再判定が差分確認の連鎖で sourceSha を先へ進め、照合はそのまま通る。
+// 提出できない合格報告が積み上がる問題(2026-07-22 に実際に起きた)の、人間による正式な解消経路
+
+export interface ConfirmDeltaArgs {
+  worksitePath: string;
+  report: string; // 作業名 または reportId(12桁hex)
+  toSha?: string; // 引き受け先。省略 = 作業場の HEAD。ダッシュボードは判断材料と同じ sha を明示で渡す
+  note: string; // 差分の何を見てどう判断したか(記録の顔。必須)
+  via?: "dashboard";
+}
+
+export function confirmDelta(args: ConfirmDeltaArgs): Reply<Report> {
+  const gateDir = repoDirOf(args.worksitePath);
+  const reject = (reason: string, fix: string, reportId?: string): Reply<Report> => {
+    appendEvent(gateDir, {
+      tool: "confirm_delta",
+      result: "rejected",
+      reportId,
+      reason,
+      ...(args.via !== undefined && { via: args.via }),
+    });
+    return { status: "rejected", reason, fix, nextSteps: [] };
+  };
+
+  const note = args.note.trim();
+  if (note.length === 0) {
+    return reject("確認内容(note)が空", "差分の何を見てどう判断したかを --note で書いてください(記録の顔になる)");
+  }
+  const report = resolveReport(gateDir, args.report.trim());
+  if (report === null) {
+    return reject(`報告「${args.report}」が見つからない`, "作業名か reportId をダッシュボードの完了報告タブで確認してください");
+  }
+  if (report.state === "submitted") {
+    return reject(
+      `報告「${report.title}」は提出済みで、もう変わらない`,
+      "続きの作業は新しい作業名で報告を開いてください",
+      report.reportId,
+    );
+  }
+  const from = report.judgment?.sourceSha ?? null;
+  if (from === null) {
+    return reject(
+      "検証したソースが確定していない(未判定・dirty なソースでの検証・旧形式の判定)",
+      "差分確認は判定済みの報告の sourceSha を先へ進める操作です。先に judge で判定してください",
+      report.reportId,
+    );
+  }
+  const to = args.toSha !== undefined ? resolveSha(args.worksitePath, args.toSha) : gitSha(args.worksitePath);
+  if (to === null) {
+    return reject(
+      `引き受け先のコミットが解決できない(${args.toSha ?? "HEAD"})`,
+      "worksitePath とコミットID を確認してください",
+      report.reportId,
+    );
+  }
+  // 同じ引き受け先の再呼び出しはべき等(1回目の再判定で sourceSha が to まで進んでいるため、
+  // from との比較より先に既存記録で判定する)
+  const existing = (report.deltaConfirms ?? []).find((d) => d.toSha === to);
+  if (existing !== undefined) {
+    appendEvent(gateDir, {
+      tool: "confirm_delta",
+      result: "ok",
+      reportId: report.reportId,
+      fromSha: existing.fromSha,
+      toSha: to,
+      alreadyConfirmed: true,
+      ...(args.via !== undefined && { via: args.via }),
+    });
+    const judged = judge({ worksitePath: args.worksitePath, reportId: report.reportId });
+    return {
+      status: "ok",
+      state: judged.status === "ok" ? judged.state : report,
+      note: `既に記録済みの差分確認(${existing.fromSha.slice(0, 7)} → ${to.slice(0, 7)}: ${existing.note})。記録し直さない`,
+      nextSteps: judged.status === "ok" && judged.state.state === "passed" ? ["submit"] : [],
+    };
+  }
+  if (to === from) {
+    return reject(
+      `差分がない(${from.slice(0, 7)} は検証したソースと同じ)`,
+      "検証したソースと HEAD は一致しています。そのまま submit できます",
+      report.reportId,
+    );
+  }
+  if (!isAncestor(args.worksitePath, from, to)) {
+    return reject(
+      `検証したソース(${from.slice(0, 7)})が ${to.slice(0, 7)} の祖先ではない(別ブランチ・rebase・巻き戻しのどれか)`,
+      "報告の作業ブランチをチェックアウトしているか確認してください。rebase・巻き戻しなら差分確認の対象外です — いまのソースで証拠を取り直して judge し直してください",
+      report.reportId,
+    );
+  }
+
+  const commits = commitsBetween(args.worksitePath, from, to);
+  report.deltaConfirms = [
+    ...(report.deltaConfirms ?? []),
+    { fromSha: from, toSha: to, note, confirmedAt: new Date().toISOString() },
+  ];
+  writeJson(join(gateDir, "reports", `${report.reportId}.json`), report);
+  appendEvent(gateDir, {
+    tool: "confirm_delta",
+    result: "ok",
+    reportId: report.reportId,
+    fromSha: from,
+    toSha: to,
+    commits: commits.length,
+    ...(args.via !== undefined && { via: args.via }),
+  });
+
+  // 差分確認も人間確認と同じく、記録したら決定論の再判定で報告を前へ進める
+  const judged = judge({ worksitePath: args.worksitePath, reportId: report.reportId });
+  const head = `差分確認を記録した: ${from.slice(0, 7)} → ${to.slice(0, 7)}(${commits.length}コミットを人間が引き受け)`;
+  if (judged.status === "rejected") {
+    return { status: "ok", state: report, note: `${head}が、再判定は拒否された: ${judged.reason}`, nextSteps: [] };
+  }
+  return {
+    status: "ok",
+    state: judged.state,
+    note: `${head}。${judged.note ?? ""}`,
     nextSteps: judged.state.state === "passed" ? ["submit"] : [],
   };
 }

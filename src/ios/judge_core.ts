@@ -27,6 +27,7 @@ export interface JudgeResult {
   behaviors: BehaviorVerdict[];
   reasons: string[];
   sourceSha: string | null;
+  verifiedSha: string | null;
 }
 
 // 確かめ方 → 適合する証拠の種類(覆いの照合表)
@@ -156,17 +157,37 @@ export function judgeReport(input: JudgeInput): JudgeResult {
     }
   }
 
-  // 検証したソース(sourceSha): submit が HEAD と照合する。単一に確定しないときは null
-  let sourceSha: string | null = null;
+  // 機械が検証したソース(verifiedSha)。単一に確定しないときは null
+  let verifiedSha: string | null = null;
   if (checkRuns.length > 0 && runShas.length === 1 && !checkRuns.some((e) => e.dirty === true)) {
-    sourceSha = checkRuns[0].gitSha ?? null;
+    verifiedSha = checkRuns[0].gitSha ?? null;
   } else if (checkRuns.length === 0 && simBuildIds.length === 1 && simBuildIds[0] !== undefined) {
     const build = buildsById[simBuildIds[0]];
-    if (build !== undefined && !build.dirty) sourceSha = build.gitSha;
+    if (build !== undefined && !build.dirty) verifiedSha = build.gitSha;
+  }
+
+  // 有効なソース(sourceSha): submit が HEAD と照合する。
+  // 差分確認(人間が「検証したソースの上に積まれた差分を見て、判定は引き続き有効」と引き受けた記録)の
+  // 連鎖を、到達点が fromSha に一致するものだけ記録順に適用して先へ進める。同じ sha への再訪は打ち切る(循環防止)
+  let sourceSha = verifiedSha;
+  if (sourceSha !== null) {
+    const visited = new Set<string>([sourceSha]);
+    let advanced = true;
+    while (advanced) {
+      advanced = false;
+      for (const dc of report.deltaConfirms ?? []) {
+        if (dc.fromSha === sourceSha && !visited.has(dc.toSha)) {
+          sourceSha = dc.toSha;
+          visited.add(dc.toSha);
+          advanced = true;
+          break;
+        }
+      }
+    }
   }
 
   const anyNg = behaviors.some((b) => b.verdict === "ng");
   const anyUnconfirmed = behaviors.some((b) => b.verdict === "unconfirmed");
   const verdict = anyNg ? "failed" : anyUnconfirmed || reasons.length > 0 ? "unconfirmed" : "passed";
-  return { verdict, behaviors, reasons, sourceSha };
+  return { verdict, behaviors, reasons, sourceSha, verifiedSha };
 }

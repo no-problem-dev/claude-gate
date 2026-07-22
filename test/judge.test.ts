@@ -435,3 +435,67 @@ describe("judgeReport — 人間確認(human_check 証拠)", () => {
     expect(result.behaviors[0].verdict).toBe("ok");
   });
 });
+
+describe("judgeReport — 差分確認の連鎖(sourceSha)", () => {
+  const A = "a".repeat(40);
+  const B = "b".repeat(40);
+  const C = "c".repeat(40);
+
+  it("到達点が一致する差分確認だけが記録順に連鎖し、verifiedSha は機械検証のまま残る", () => {
+    const report = {
+      ...makeReport(
+        [{ behavior: "計算が正しい", change_kind: "logic", check: "unit_test" }],
+        [{ evidenceId: "c1", behaviorIndex: 1 }],
+      ),
+      deltaConfirms: [
+        { fromSha: A, toSha: B, note: "1つ目を見た", confirmedAt: "t1" },
+        { fromSha: "f".repeat(40), toSha: "e".repeat(40), note: "無関係", confirmedAt: "t2" },
+        { fromSha: B, toSha: C, note: "2つ目を見た", confirmedAt: "t3" },
+      ],
+    };
+    const result = judgeReport(input({ report, evidenceById: { c1: checkRunEvidence("c1", "unit_test", 0, A) } }));
+    expect(result.verdict).toBe("passed");
+    expect(result.verifiedSha).toBe(A);
+    expect(result.sourceSha).toBe(C);
+  });
+
+  it("差分確認が無ければ sourceSha = verifiedSha(従来どおり)", () => {
+    const report = makeReport(
+      [{ behavior: "計算が正しい", change_kind: "logic", check: "unit_test" }],
+      [{ evidenceId: "c1", behaviorIndex: 1 }],
+    );
+    const result = judgeReport(input({ report, evidenceById: { c1: checkRunEvidence("c1", "unit_test", 0, A) } }));
+    expect(result.sourceSha).toBe(A);
+    expect(result.verifiedSha).toBe(A);
+  });
+
+  it("循環する差分確認でも停止する(同じ sha への再訪は適用しない)", () => {
+    const report = {
+      ...makeReport(
+        [{ behavior: "計算が正しい", change_kind: "logic", check: "unit_test" }],
+        [{ evidenceId: "c1", behaviorIndex: 1 }],
+      ),
+      deltaConfirms: [
+        { fromSha: A, toSha: B, note: "x", confirmedAt: "t1" },
+        { fromSha: B, toSha: A, note: "y", confirmedAt: "t2" },
+      ],
+    };
+    const result = judgeReport(input({ report, evidenceById: { c1: checkRunEvidence("c1", "unit_test", 0, A) } }));
+    expect(result.sourceSha).toBe(B);
+  });
+
+  it("機械検証が確定しない(dirty)なら差分確認があっても sourceSha は null のまま", () => {
+    const report = {
+      ...makeReport(
+        [{ behavior: "計算が正しい", change_kind: "logic", check: "unit_test" }],
+        [{ evidenceId: "c1", behaviorIndex: 1 }],
+      ),
+      deltaConfirms: [{ fromSha: A, toSha: B, note: "x", confirmedAt: "t1" }],
+    };
+    const result = judgeReport(
+      input({ report, evidenceById: { c1: checkRunEvidence("c1", "unit_test", 0, A, true) } }),
+    );
+    expect(result.sourceSha).toBeNull();
+    expect(result.verifiedSha).toBeNull();
+  });
+});

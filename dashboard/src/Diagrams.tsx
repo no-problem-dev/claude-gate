@@ -137,33 +137,51 @@ export function VerifyDiagram() {
   );
 }
 
-// ⑤ いま: 完了報告の一生(ドメインモデル §3.2 の写し。スライス2 で実装)
+// ⑤ いま: 完了報告の一生(ドメインモデル §3.2 の写し)。
+// 正確さの要点3つ: (1) 判定済みに証拠が増えると判定は無効になり「証拠あり」に戻る —
+// 人間確認も証拠なので、この同じ経路で自動再判定される(特別な遷移ではない)。
+// (2) ずれは状態ではなく導出 — 合格の隣に注記として描く(状態遷移の箱にしない)。
+// (3) 差分確認は状態を変えない(合格のまま、判定の sourceSha が先へ進む)
 export function ReportStateDiagram() {
   return (
-    <svg viewBox="0 0 760 232" className="h-auto w-full text-zinc-800 dark:text-zinc-100" role="img" aria-label="完了報告の状態遷移図: 下書きから証拠ありへ、判定で合格・不合格・確認できずに分かれ、合格だけが提出済みに進む。確認できずは人間に渡す">
+    <svg viewBox="0 0 760 312" className="h-auto w-full text-zinc-800 dark:text-zinc-100" role="img" aria-label="完了報告の状態遷移図: 下書きから証拠ありへ、判定で合格・不合格・確認できずに分かれ、合格だけが提出済みに進む。不合格は証拠を集め直して、確認できずは人間確認を記録して、どちらも証拠ありに戻って再判定される。ずれは状態ではなく導出で、差分確認か取り直しで解消する">
       <Arrow id="st" />
-      <Box x={8} y={92} w={92} label={REPORT_STATE_LABEL.draft} />
-      <line x1={100} y1={112} x2={172} y2={112} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
-      <text x={136} y={102} textAnchor="middle" fontSize="10" className={inkSub}>証拠を付ける</text>
-      <Box x={176} y={92} w={104} label={REPORT_STATE_LABEL.evidenced} />
+      <Box x={8} y={136} w={84} label={REPORT_STATE_LABEL.draft} />
+      <line x1={92} y1={156} x2={164} y2={156} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
+      <text x={128} y={146} textAnchor="middle" fontSize="10" className={inkSub}>証拠を付ける</text>
+      <Box x={168} y={136} w={100} label={REPORT_STATE_LABEL.evidenced} />
 
-      <line x1={280} y1={104} x2={356} y2={44} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
-      <line x1={280} y1={112} x2={356} y2={112} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
-      <line x1={280} y1={120} x2={356} y2={182} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
-      <text x={318} y={92} textAnchor="middle" fontSize="10" className={inkSub}>判定</text>
+      <line x1={268} y1={146} x2={388} y2={52} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
+      <line x1={268} y1={156} x2={388} y2={156} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
+      <line x1={268} y1={166} x2={388} y2={262} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
+      <text x={328} y={122} textAnchor="middle" fontSize="10" className={inkSub}>判定(決定論)</text>
 
-      <Box x={360} y={22} w={104} label={REPORT_STATE_LABEL.passed} tone="good" />
-      <line x1={464} y1={42} x2={548} y2={42} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
-      <text x={506} y={32} textAnchor="middle" fontSize="10" className={inkSub}>提出する</text>
-      <Box x={552} y={22} w={120} h={44} label={REPORT_STATE_LABEL.submitted} sub="PR レビュー依頼済み" />
+      <Box x={392} y={26} w={96} label={REPORT_STATE_LABEL.passed} tone="good" />
+      <line x1={488} y1={46} x2={612} y2={46} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
+      <text x={550} y={36} textAnchor="middle" fontSize="10" className={inkSub}>提出(三点照合)</text>
+      <Box x={616} y={22} w={136} h={48} label={REPORT_STATE_LABEL.submitted} sub="終着 — もう変わらない" />
 
-      <Box x={360} y={92} w={104} label={REPORT_STATE_LABEL.failed} tone="bad" />
-      <path d="M 412 132 L 412 158 L 228 158 L 228 132" fill="none" strokeWidth="1.3" strokeDasharray="4 3" className={line} markerEnd="url(#st)" />
-      <text x={320} y={152} textAnchor="middle" fontSize="10" className={inkSub}>直して証拠を集め直す</text>
+      {/* ずれ: 状態ではなく導出。合格のまま起きて、合格のまま解消される */}
+      <line x1={465} y1={66} x2={580} y2={106} strokeWidth="1.1" strokeDasharray="2.5 3" className={line} markerEnd="url(#st)" />
+      <text x={512} y={102} fontSize="9.5" className={inkSub}>検証後にコミット</text>
+      <rect x={548} y={108} width={204} height={52} rx="10" strokeWidth="1" strokeDasharray="4 3" className={boxWarn} />
+      <text x={650} y={126} textAnchor="middle" fontSize="12" fontWeight="600" className={inkWarn}>ずれ(状態ではなく導出)</text>
+      <text x={650} y={144} textAnchor="middle" fontSize="9.5" className={inkSub}>差分確認(人間の引き受け)か取り直しで解消</text>
 
-      <Box x={360} y={180} w={120} label={REPORT_STATE_LABEL.unconfirmed} tone="warn" />
-      <line x1={480} y1={200} x2={548} y2={200} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
-      <Box x={552} y={180} w={120} label="人間に渡す" />
+      <Box x={392} y={136} w={96} label={REPORT_STATE_LABEL.failed} tone="bad" />
+      <path d="M 440 176 L 440 208 L 233 208 L 233 180" fill="none" strokeWidth="1.3" strokeDasharray="4 3" className={line} markerEnd="url(#st)" />
+      <text x={336} y={202} textAnchor="middle" fontSize="10" className={inkSub}>直して証拠を集め直す</text>
+
+      <Box x={392} y={242} w={112} label={REPORT_STATE_LABEL.unconfirmed} tone="warn" />
+      <path d="M 388 262 L 203 262 L 203 180" fill="none" strokeWidth="1.3" strokeDasharray="4 3" className={line} markerEnd="url(#st)" />
+      <text x={296} y={254} textAnchor="middle" fontSize="10" className={inkSub}>人間確認(証拠になる)</text>
+
+      <text x={296} y={286} textAnchor="middle" fontSize="10" className={inkSub}>
+        判定済みに証拠が増えると判定は無効 — 「証拠あり」に戻って再判定される
+      </text>
+      <text x={620} y={286} textAnchor="middle" fontSize="10" className={inkSub}>
+        人間の操作は非同期でよい(あとからで完結する)
+      </text>
     </svg>
   );
 }

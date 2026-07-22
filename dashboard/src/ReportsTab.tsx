@@ -404,9 +404,6 @@ function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail })
           value={note}
           disabled={busy}
           onChange={(e) => setNote(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && note.trim() !== "" && !busy) setDialogOpen(true);
-          }}
         />
         <button
           className="cursor-pointer rounded-lg border border-amber-600/60 bg-amber-500/15 px-3 py-1.5 text-[13px] font-semibold text-amber-800 transition-colors hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-200"
@@ -589,9 +586,6 @@ function DriftNotice({ report, detail }: { report: Report; detail: RepoDetail })
                 value={note}
                 disabled={busy}
                 onChange={(e) => setNote(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && note.trim() !== "" && !busy) setDialogOpen(true);
-                }}
               />
               <button
                 className="cursor-pointer rounded-lg border border-amber-600/60 bg-amber-500/15 px-3 py-1.5 text-[13px] font-semibold text-amber-800 transition-colors hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-200"
@@ -745,9 +739,6 @@ function DeltaConfirmSection({ report, detail }: { report: Report; detail: RepoD
                 value={note}
                 disabled={busy}
                 onChange={(e) => setNote(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && note.trim() !== "" && !busy) setDialogOpen(true);
-                }}
               />
               <button
                 className="cursor-pointer rounded-lg border border-amber-600/60 bg-amber-500/15 px-3 py-1.5 text-[13px] font-semibold text-amber-800 transition-colors hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-200"

@@ -35,7 +35,7 @@ export function GuideView() {
       {/* ② なぜ */}
       <section className="pb-8">
         <SectionTitle>なぜ作ったか — 実際に起きた事故から</SectionTitle>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <AccidentCard title="古いビルドを見て「直った」と誤判定">
             シミュレータに残っていた古いビルドのスクショを見て「修正済み」と報告していた。
             証拠に「どのビルドを見たか」という<strong>出所</strong>がなかった。
@@ -47,6 +47,11 @@ export function GuideView() {
           <AccidentCard title="お願いベースのゲートは破れる">
             「問題を無視して PASS にするな」と書いたスキルは、書いてあるだけで守られる保証がない。
             <strong>約束ではなく構造</strong>で守る必要があった。
+          </AccidentCard>
+          <AccidentCard title="確認したのに、提出できない">
+            前日に検証した報告を、別の作業中に人間が確認して提出したら「コミットが動いている」と拒否された。
+            <strong>人間の動きは非同期</strong>(検証は過去・確認はさっき・提出はいま)なのに、
+            提出がローカルの状態に依存していた。
           </AccidentCard>
         </div>
         <Card className="mt-3 p-4">
@@ -68,7 +73,7 @@ export function GuideView() {
           </RoleLane>
           <LaneArrow label="記録" />
           <RoleLane name="人間" verb="観て決める">
-            ダッシュボードで確認。「確認できず」を引き取る
+            ダッシュボードで確認。「確認できず」と「ずれ」を引き取る — 非同期でよい(あとからで完結する)
           </RoleLane>
         </div>
       </section>
@@ -116,10 +121,11 @@ export function GuideView() {
           </Step>
           <Step n={8} name="提出" en="submit">
             共有(feature ブランチへの push・下書きPR の作成)は自由。合格した報告の、
-            <strong>検証されたそのソース(HEAD = 判定時の sha = PR の先頭)</strong>だけが
-            下書きPR をレビュー可能にできる。検証後にコミットが動いていたら拒否 —
-            「別物を見て OK」の提出版を締める。取り込み(マージ)は人間だけの操作。
-            提出済みの報告は終着(証拠の追加も不可)。
+            <strong>検証されたそのソース(判定時の sha = 作業ブランチ先端 = PR の先頭)</strong>だけが
+            下書きPR をレビュー可能にできる。検証後にコミットが積まれていたら拒否 —
+            「別物を見て OK」の提出版を締める。照合も push もブランチ基準で、
+            ローカルのチェックアウトや未コミット変更には依存しない。
+            取り込み(マージ)は人間だけの操作。提出済みの報告は終着(証拠の追加も不可)。
           </Step>
         </ol>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -127,6 +133,36 @@ export function GuideView() {
           <Chip size="sm" color="default">すべての操作はべき等(何度呼んでも安全)</Chip>
           <Chip size="sm" color="default">記録は不変(拒否も含めて全部残る)</Chip>
         </div>
+
+        <h3 className="mt-6 mb-2 text-[13px] font-semibold">人間の番 — 非同期でよい</h3>
+        <Card className="p-4">
+          <p className="text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300">
+            ここまでのループはエージェントの仕事。人間に残るのは<strong>3つの引き取り</strong>で、
+            どれも急がなくていい — 検証は過去、確認はあとから、提出はさらにあとから、
+            そのときローカルで別の作業をしていても完結する(報告が<strong>作業ブランチ</strong>に
+            属しているので、ゲートはローカルの状態を見ない)。
+          </p>
+          <ol className="mt-3 grid gap-2 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300">
+            <li>
+              <strong className="text-foreground">「確認できず」を確かめる</strong> —
+              機械に見えない動作(課金・動きの質など)を自分の目で確かめ、報告カードの人間確認フォームか
+              CLI で記録する。記録は証拠になり、自動で再判定される。
+            </li>
+            <li>
+              <strong className="text-foreground">「ずれ」を引き取る</strong> —
+              検証したソースの後にブランチへコミットが積まれると、カードにコミット一覧つきで出る
+              (提出の門で初めて発覚しない)。推奨は取り直し(エージェントに再検証を依頼)。
+              差分を自分の目で見て「判定は引き続き有効」と言えるときだけ、
+              <strong>差分確認</strong>で引き受ける — 人間の強い権限は照合を飛ばす形ではなく、
+              機械に見えない判断を記録として供給する形で行使する。
+            </li>
+            <li>
+              <strong className="text-foreground">提出して、取り込む</strong> —
+              合格した報告はカードのボタンで提出できる(条件の照合はエージェント経由と同一 —
+              入口が違うだけで門は同じ)。マージだけは GitHub 上の人間の操作。
+            </li>
+          </ol>
+        </Card>
 
         <h3 className="mt-6 mb-2 text-[13px] font-semibold">出所照合のしくみ — なぜ偽れないか</h3>
         <Card className="p-4">
@@ -230,6 +266,11 @@ export function GuideView() {
             ドラフト解除)、取り込みは人間だけ。記録の掃除は人間の CLI(claude-gate forget)—
             エージェントは記録を消せない
           </StatusRow>
+          <StatusRow chip={<Chip size="sm" color="success">稼働中</Chip>} name="人間の非同期な操作面(スライス4)">
+            人間確認・差分確認・提出がダッシュボードと CLI から、あとからでも完結する。
+            報告は作業ブランチに属し、照合と push はローカルの状態に依存しない。
+            ずれ(検証後に積まれたコミット)は導出で常時カードに表示 — 提出の門で初めて発覚しない
+          </StatusRow>
         </div>
         <h3 className="mt-6 mb-2 text-[13px] font-semibold">
           全体像 — 完了報告の一生(全状態が稼働中)
@@ -239,6 +280,10 @@ export function GuideView() {
           <p className="mt-2 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300">
             状態はこの1本だけ。証拠を集めている間の試行錯誤は自由で、
             <strong>状態から状態への移動だけ</strong>をゲートが決定論で判定する。
+            判定済みの報告に証拠が増えると判定は無効になり「証拠あり」に戻る —
+            人間確認も証拠なので、この同じ経路で自動的に再判定される(特別な遷移は無い)。
+            <strong>ずれは状態ではなく導出</strong>(検証したソースの後にブランチへ積まれたコミット。
+            合格のまま起きて、差分確認か取り直しで合格のまま解消される)。
             「確認できず」は失敗ではなく、人間に渡すための正式な出口。
           </p>
         </Card>

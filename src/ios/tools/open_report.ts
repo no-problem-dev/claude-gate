@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 import { appendEvent } from "../../kernel/audit.js";
 import { readJson, repoDirOf, writeJson } from "../../kernel/store.js";
 import { effectivePassline, loadGateYaml } from "../gate_yaml.js";
+import { gitBranch } from "../git.js";
 import { CHANGE_KINDS, CHANGE_KIND_LABEL, CHECK_KINDS, CHECK_LABEL } from "../words.js";
 import type { BehaviorEntry, ChangeKind, CheckKind, Reply, Report } from "../words.js";
 
@@ -90,6 +91,11 @@ export function openReport(args: OpenReportArgs): Reply<Report> {
   const reportId = createHash("sha256").update(`${repoKey}\0${title}`).digest("hex").slice(0, 12);
   const recordPath = join(gateDir, "reports", `${reportId}.json`);
 
+  // 作業ブランチを事実として記録する(公式の遷移はローカルのチェックアウトでなくこれを基準に動く)。
+  // detached HEAD(--abbrev-ref が "HEAD" を返す)は帰属先が無いので記録しない
+  const currentBranch = gitBranch(args.worksitePath);
+  const branch = currentBranch !== null && currentBranch !== "HEAD" ? currentBranch : undefined;
+
   const existing = readJson<Report>(recordPath);
   if (existing !== null) {
     const same = JSON.stringify(existing.behaviors) === JSON.stringify(behaviors);
@@ -99,11 +105,18 @@ export function openReport(args: OpenReportArgs): Reply<Report> {
         "別の作業名で新しい報告を開くか、既存の報告(番号は既存の動作一覧のまま)に証拠を付けてください",
       );
     }
+    // 旧報告(ブランチ記録なし)は、作業のブランチからのべき等な再オープンで帰属を補完できる
+    let backfilled = "";
+    if (existing.branch === undefined && branch !== undefined && existing.state !== "submitted") {
+      existing.branch = branch;
+      writeJson(recordPath, existing);
+      backfilled = `。作業ブランチ ${branch} を記録した`;
+    }
     appendEvent(gateDir, { tool: "open_report", result: "ok", reportId, alreadyOpened: true });
     return {
       status: "ok",
       state: existing,
-      note: `既オープンの報告(オープン: ${existing.openedAt})。動作一覧は最初の宣言のまま`,
+      note: `既オープンの報告(オープン: ${existing.openedAt})。動作一覧は最初の宣言のまま${backfilled}`,
       nextSteps: ["register_build", "attach_evidence"],
     };
   }
@@ -111,6 +124,7 @@ export function openReport(args: OpenReportArgs): Reply<Report> {
   const report: Report = {
     reportId,
     title,
+    ...(branch !== undefined && { branch }),
     behaviors,
     state: "draft",
     evidence: [],

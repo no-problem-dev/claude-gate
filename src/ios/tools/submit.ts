@@ -2,14 +2,16 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { appendEvent } from "../../kernel/audit.js";
 import { repoDirOf, writeJson } from "../../kernel/store.js";
-import { gitDirty, gitSha } from "../git.js";
+import { branchTip, gitDirty, gitSha } from "../git.js";
 import { prReady, prView, resolveGh } from "../github.js";
 import { readReport } from "../report_link.js";
 import type { Reply, Report } from "../words.js";
 
 // 提出する: 合格した報告の、検証されたそのソースの下書きPR だけがレビュー可能にできる(A7 / K-5)。
-// 合格だけでは足りない — 判定が検証したソース(sourceSha)と HEAD と PR 先頭の三点照合を通す。
+// 合格だけでは足りない — 判定が検証したソース(sourceSha)と報告の作業ブランチ先端と PR 先頭の三点照合を通す。
 // 検証後に積んだ・巻き戻したソースの提出は「別物を見て OK」の提出版として拒否する。
+// 人間の動きは非同期: 照合と push はブランチ基準で、ローカルのチェックアウト・worktree・未コミット変更に依存しない
+// (旧形式 = ブランチ記録の無い報告だけ、従来どおり作業場の HEAD を基準にする)。
 // 共有(feature ブランチへの push・下書きPR の作成)は自由領域、取り込み(merge)は人間だけ(words.ts の境界線)。
 
 export interface SubmitArgs {
@@ -69,29 +71,52 @@ export function submit(args: SubmitArgs): Reply<Report> {
       ["run_check", "attach_evidence", "judge"],
     );
   }
-  if (gitDirty(args.worksitePath)) {
-    return reject(
-      "作業場に未コミットの変更がある(push されるのは HEAD で、いまの作業場と一致しない)",
-      "コミットしてから提出してください",
-      ["submit"],
-    );
-  }
-  const head = gitSha(args.worksitePath);
-  if (head !== sourceSha) {
-    return reject(
-      `HEAD(${head?.slice(0, 7) ?? "なし"})が検証したソース(${sourceSha.slice(0, 7)})と違う`,
-      "検証後にコミットが動いています。いまの HEAD で証拠を取り直して judge → submit し直してください",
-      ["run_check", "attach_evidence", "judge"],
-    );
-  }
-
   let branch: string;
-  try {
-    branch = execFileSync("git", ["-C", args.worksitePath, "rev-parse", "--abbrev-ref", "HEAD"], {
-      encoding: "utf8",
-    }).trim();
-  } catch (error) {
-    return reject(`ブランチ名を取得できない: ${String(error)}`, "worksitePath を確認してください", ["submit"]);
+  let pushRef: string;
+  if (report.branch !== undefined) {
+    // ブランチ基準の照合: sourceSha = ブランチ先端。ローカルのチェックアウト・未コミット変更は見ない
+    branch = report.branch;
+    pushRef = `refs/heads/${branch}`;
+    const tip = branchTip(args.worksitePath, branch);
+    if (tip === null) {
+      return reject(
+        `作業ブランチ「${branch}」が見つからない`,
+        "ブランチが削除・改名されていないか確認してください",
+        ["submit"],
+      );
+    }
+    if (tip !== sourceSha) {
+      return reject(
+        `ブランチ ${branch} の先端(${tip.slice(0, 7)})が検証したソース(${sourceSha.slice(0, 7)})と違う`,
+        "検証後にコミットが積まれています。いまの先端で証拠を取り直して judge し直すか、人間が差分を見て引き受けてください(差分確認)",
+        ["run_check", "attach_evidence", "judge"],
+      );
+    }
+  } else {
+    // 旧形式(ブランチ記録なし): 作業場の HEAD 基準
+    if (gitDirty(args.worksitePath)) {
+      return reject(
+        "作業場に未コミットの変更がある(push されるのは HEAD で、いまの作業場と一致しない)",
+        "コミットしてから提出してください",
+        ["submit"],
+      );
+    }
+    const head = gitSha(args.worksitePath);
+    if (head !== sourceSha) {
+      return reject(
+        `HEAD(${head?.slice(0, 7) ?? "なし"})が検証したソース(${sourceSha.slice(0, 7)})と違う`,
+        "検証後にコミットが動いています。いまの HEAD で証拠を取り直して judge → submit し直してください",
+        ["run_check", "attach_evidence", "judge"],
+      );
+    }
+    pushRef = "HEAD";
+    try {
+      branch = execFileSync("git", ["-C", args.worksitePath, "rev-parse", "--abbrev-ref", "HEAD"], {
+        encoding: "utf8",
+      }).trim();
+    } catch (error) {
+      return reject(`ブランチ名を取得できない: ${String(error)}`, "worksitePath を確認してください", ["submit"]);
+    }
   }
   const remote = "origin";
   try {
@@ -104,7 +129,7 @@ export function submit(args: SubmitArgs): Reply<Report> {
     );
   }
   try {
-    execFileSync("git", ["-C", args.worksitePath, "push", remote, "HEAD"], { encoding: "utf8", stdio: "pipe" });
+    execFileSync("git", ["-C", args.worksitePath, "push", remote, pushRef], { encoding: "utf8", stdio: "pipe" });
   } catch (error) {
     const stderr = (error as { stderr?: string }).stderr ?? String(error);
     return reject(`push が失敗した: ${stderr.trim()}`, "reason の git エラーを解消してから提出し直してください", [
@@ -120,7 +145,7 @@ export function submit(args: SubmitArgs): Reply<Report> {
       ["submit"],
     );
   }
-  const lookup = prView(gh, args.worksitePath);
+  const lookup = prView(gh, args.worksitePath, report.branch);
   if (lookup.status === "none") {
     return reject(
       `このブランチ(${branch})の PR が無い`,

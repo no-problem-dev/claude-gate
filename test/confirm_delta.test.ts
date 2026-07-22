@@ -178,3 +178,34 @@ describe("confirmDelta", () => {
     expect(event).toMatchObject({ via: "dashboard", fromSha: verified, toSha: head, commits: 1 });
   });
 });
+
+describe("confirmDelta — ブランチ基準(非同期の人間)", () => {
+  it("報告はオープン時に作業ブランチを記録する", () => {
+    commit("init");
+    const branch = git("rev-parse", "--abbrev-ref", "HEAD");
+    const report = openReport({
+      worksitePath: worksite,
+      title: "ブランチ記録",
+      behaviors: [{ behavior: "計算が正しい", change_kind: "logic", check: "unit_test" }],
+    });
+    expect(report.status).toBe("ok");
+    if (report.status !== "ok") return;
+    expect(report.state.branch).toBe(branch);
+  });
+
+  it("引き受け先の既定は作業ブランチの先端(別ブランチをチェックアウト中でも変わらない)", () => {
+    commit("init");
+    const reportId = passedReport();
+    writeFileSync(join(worksite, "next.txt"), "x");
+    const tip = commit("作業ブランチに積んだコミット");
+    git("checkout", "-q", "-b", "other-work");
+    writeFileSync(join(worksite, "other.txt"), "y");
+    commit("別の作業のコミット");
+
+    const result = confirmDelta({ worksitePath: worksite, report: reportId, note: "差分を見た" });
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.state.judgment?.sourceSha).toBe(tip);
+    expect(result.state.deltaConfirms?.[0]?.toSha).toBe(tip);
+  });
+});

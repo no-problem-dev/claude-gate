@@ -153,9 +153,18 @@ export interface Submission {
   pushedAt?: string; // 旧形式(提出 = push)の記録のみ
 }
 
+// ずれ: 検証したソースの後に作業ブランチへ積まれたコミット(サーバーの読み取りモデルの導出。保存されない)
+export interface SourceDrift {
+  branch: string;
+  tip: string;
+  ancestorOk: boolean;
+  commits: { sha: string; subject: string }[];
+}
+
 export interface Report {
   reportId: string;
   title: string;
+  branch?: string; // 作業ブランチ(オープン時に記録。旧報告には無い)
   behaviors: BehaviorEntry[];
   state: ReportState;
   evidence: { evidenceId: string; behaviorIndex: number }[];
@@ -164,6 +173,7 @@ export interface Report {
   judgment?: Judgment;
   deltaConfirms?: DeltaConfirmation[];
   submission?: Submission;
+  drift?: SourceDrift;
 }
 
 export const REPORT_STATE_COLOR: Record<ReportState, "default" | "accent" | "success" | "danger" | "warning"> = {

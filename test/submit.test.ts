@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -211,7 +211,7 @@ describe("submit", () => {
     expect(result.reason).toContain("合格していない");
   });
 
-  it("検証後にコミットが動いたら提出できない(HEAD ≠ sourceSha)", () => {
+  it("検証後にコミットが動いたら提出できない(ブランチ先端 ≠ sourceSha)", () => {
     const reportId = passedReport();
     writeFileSync(join(worksite, "after.txt"), "検証後の変更");
     commitAll("after verify");
@@ -221,8 +221,42 @@ describe("submit", () => {
     expect(result.reason).toContain("検証したソース");
   });
 
-  it("作業場が dirty なら提出できない", () => {
+  // 人間の動きは非同期: 照合と push は報告の作業ブランチ基準で、ローカルの状態に依存しない
+  it("別ブランチで作業中でも、報告の作業ブランチ基準で提出できる", () => {
     const reportId = passedReport();
+    const branch = git("rev-parse", "--abbrev-ref", "HEAD");
+    const verified = git("rev-parse", "HEAD");
+    putPr(); // PR 先頭 = 検証済みソース
+    git("checkout", "-q", "-b", "other-work");
+    writeFileSync(join(worksite, "other.txt"), "別の作業");
+    commitAll("別の作業のコミット");
+
+    const result = submit({ worksitePath: worksite, reportId });
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") throw new Error("expected ok");
+    expect(result.state.state).toBe("submitted");
+    expect(result.state.submission?.branch).toBe(branch);
+    expect(result.state.submission?.sha).toBe(verified);
+    const pushed = execFileSync("git", ["-C", bare, "rev-parse", branch], { encoding: "utf8" }).trim();
+    expect(pushed).toBe(verified);
+  });
+
+  it("未コミット変更があってもブランチ基準の提出は通る(ローカルの状態を見ない)", () => {
+    const reportId = passedReport();
+    putPr();
+    writeFileSync(join(worksite, "wip.txt"), "未コミットの別作業");
+    const result = submit({ worksitePath: worksite, reportId });
+    expect(result.status).toBe("ok");
+  });
+
+  it("旧形式(ブランチ記録なし)の報告は従来どおり作業場の HEAD 基準(dirty は拒否)", () => {
+    const reportId = passedReport();
+    const reposDir = join(process.env.GATE_HOME!, "repos");
+    const repoKey = readdirSync(reposDir)[0];
+    const recordPath = join(reposDir, repoKey, "reports", `${reportId}.json`);
+    const record = JSON.parse(readFileSync(recordPath, "utf8")) as { branch?: string };
+    delete record.branch;
+    writeFileSync(recordPath, JSON.stringify(record));
     writeFileSync(join(worksite, "wip.txt"), "未コミット");
     const result = submit({ worksitePath: worksite, reportId });
     expect(result.status).toBe("rejected");

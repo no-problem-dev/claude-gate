@@ -31,13 +31,19 @@ export type PrLookup =
   | { status: "none" } // このブランチの PR が無い
   | { status: "error"; detail: string };
 
-export function prView(gh: string, worksitePath: string): PrLookup {
+// branch 指定時はそのブランチの PR を引く(ローカルのチェックアウト状態に依存しない)。
+// 省略時は cwd のチェックアウト中ブランチの PR(旧形式の報告向け)
+export function prView(gh: string, worksitePath: string, branch?: string): PrLookup {
   try {
-    const out = execFileSync(gh, ["pr", "view", "--json", "number,url,isDraft,state,headRefOid"], {
-      cwd: worksitePath,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const out = execFileSync(
+      gh,
+      ["pr", "view", ...(branch !== undefined ? [branch] : []), "--json", "number,url,isDraft,state,headRefOid"],
+      {
+        cwd: worksitePath,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
     return { status: "found", pr: JSON.parse(out) as PullRequest };
   } catch (error) {
     const stderr = ((error as { stderr?: string }).stderr ?? String(error)).trim();

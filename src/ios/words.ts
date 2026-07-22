@@ -225,6 +225,8 @@ export interface Submission {
 export interface Report {
   reportId: string; // repoKey + 作業名から計算(べき等)
   title: string; // 作業名(日本語の日常語)
+  branch?: string; // 作業ブランチ(オープン時に記録)。人間の動きは非同期 — 公式の遷移(差分確認・提出)は
+  // ローカルのチェックアウト状態でなくこれを基準に動く。旧報告には無い(べき等な再オープンで補完される)
   behaviors: BehaviorEntry[]; // 並び順が番号(1始まり)。空の報告は作れない(A3)
   state: ReportState;
   evidence: { evidenceId: string; behaviorIndex: number }[];

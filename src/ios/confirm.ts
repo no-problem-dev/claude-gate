@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { appendEvent } from "../kernel/audit.js";
 import { readJson, repoDirOf, writeJson } from "../kernel/store.js";
-import { commitsBetween, gitSha, isAncestor, resolveSha } from "./git.js";
+import { branchTip, commitsBetween, gitSha, isAncestor, resolveSha } from "./git.js";
 import { linkToReport, readReport, validateLink } from "./report_link.js";
 import { judge } from "./tools/judge.js";
 import type { Evidence, Reply, Report } from "./words.js";
@@ -124,7 +124,7 @@ export function confirmBehavior(args: ConfirmArgs): Reply<Report> {
 export interface ConfirmDeltaArgs {
   worksitePath: string;
   report: string; // 作業名 または reportId(12桁hex)
-  toSha?: string; // 引き受け先。省略 = 作業場の HEAD。ダッシュボードは判断材料と同じ sha を明示で渡す
+  toSha?: string; // 引き受け先。省略 = 報告の作業ブランチ先端(旧報告は作業場の HEAD)。ダッシュボードは判断材料と同じ sha を明示で渡す
   note: string; // 差分の何を見てどう判断したか(記録の顔。必須)
   via?: "dashboard";
 }
@@ -165,10 +165,17 @@ export function confirmDelta(args: ConfirmDeltaArgs): Reply<Report> {
       report.reportId,
     );
   }
-  const to = args.toSha !== undefined ? resolveSha(args.worksitePath, args.toSha) : gitSha(args.worksitePath);
+  // 既定の引き受け先は報告の作業ブランチ先端(ローカルのチェックアウト状態に依存しない)。
+  // 旧報告(ブランチ記録なし)だけ作業場の HEAD にフォールバック
+  const to =
+    args.toSha !== undefined
+      ? resolveSha(args.worksitePath, args.toSha)
+      : report.branch !== undefined
+        ? branchTip(args.worksitePath, report.branch)
+        : gitSha(args.worksitePath);
   if (to === null) {
     return reject(
-      `引き受け先のコミットが解決できない(${args.toSha ?? "HEAD"})`,
+      `引き受け先のコミットが解決できない(${args.toSha ?? report.branch ?? "HEAD"})`,
       "worksitePath とコミットID を確認してください",
       report.reportId,
     );

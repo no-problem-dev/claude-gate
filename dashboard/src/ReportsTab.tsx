@@ -156,6 +156,11 @@ function ReportCard({
       <header className="flex flex-wrap items-center gap-2.5">
         <h3 className="text-base font-semibold">{report.title}</h3>
         <ReportStateChip state={report.state} />
+        {report.branch !== undefined && (
+          <span className="font-mono text-[11px] text-zinc-500 dark:text-zinc-400" title="作業ブランチ">
+            {report.branch}
+          </span>
+        )}
         {report.judgment !== undefined && (
           <span className="text-xs text-zinc-500 dark:text-zinc-400" title="判定した時刻">
             判定 {formatTime(report.judgment.judgedAt)}
@@ -221,6 +226,7 @@ function ReportCard({
         </ul>
       )}
 
+      {report.drift !== undefined && <DriftNotice report={report} detail={detail} />}
       {report.state === "unconfirmed" && <ConfirmForm report={report} detail={detail} />}
       {report.state === "passed" && <SubmitAction report={report} detail={detail} />}
 
@@ -482,7 +488,9 @@ function SubmitAction({ report, detail }: { report: Report; detail: RepoDetail }
         </button>
       </div>
       {outcome !== null && <p className="text-[12.5px] [overflow-wrap:anywhere]">{outcome}</p>}
-      <DeltaConfirmSection report={report} detail={detail} />
+      {report.drift === undefined && report.branch === undefined && (
+        <DeltaConfirmSection report={report} detail={detail} />
+      )}
       <ActionDialog
         open={dialogOpen}
         title="提出しますか?"
@@ -504,9 +512,124 @@ function SubmitAction({ report, detail }: { report: Report; detail: RepoDetail }
   );
 }
 
-// 差分確認(人間の引き受け)の導線: 検証後にコミットが積まれて提出が止まったとき、
-// ずれているコミットの一覧(判断材料)を見せた上で、人間が「判定は引き続き有効」と引き受けられる。
-// 推奨は取り直し(いまの HEAD で再検証)— 引き受けは人間の責任であることを文面で明示する。
+// 差分確認の記録(POST /api/confirm-delta)。ずれバナーと旧報告向けフォームの共通処理
+async function postConfirmDelta(
+  repoKey: string,
+  reportId: string,
+  toSha: string,
+  note: string,
+): Promise<string> {
+  try {
+    const res = await fetch("/api/confirm-delta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repoKey, reportId, toSha, note }),
+    });
+    const body = (await res.json()) as { status: string; note?: string; reason?: string; fix?: string };
+    if (body.status === "ok") return `✓ ${body.note ?? "記録した"}`;
+    return `✕ ${body.reason ?? "記録できなかった"}${body.fix !== undefined ? ` — 直し方: ${body.fix}` : ""}`;
+  } catch (error) {
+    return `✕ 記録に失敗: ${String(error)}`;
+  }
+}
+
+// ずれの通知: 検証したソースの後に作業ブランチへコミットが積まれた事実を、発生した瞬間から見せる
+// (提出の門で初めて発覚させない)。人間の動きは非同期 — 確認・引き受け・提出がこのカードだけで完結する。
+// 合格している報告には差分確認(人間の引き受け)フォームを畳まずに出す。推奨は取り直しであることを明示
+function DriftNotice({ report, detail }: { report: Report; detail: RepoDetail }) {
+  const drift = report.drift;
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [outcome, setOutcome] = useState<string | null>(null);
+  if (drift === undefined) return null;
+  const sourceSha = report.judgment?.sourceSha ?? null;
+
+  const record = async () => {
+    setBusy(true);
+    setOutcome(await postConfirmDelta(detail.repoKey, report.reportId, drift.tip, note.trim()));
+    setNote("");
+    setBusy(false);
+    setDialogOpen(false);
+  };
+
+  return (
+    <div className="mt-3 grid gap-2 rounded-xl border border-amber-500/40 bg-amber-500/8 p-3 text-[13px]">
+      {!drift.ancestorOk ? (
+        <p>
+          検証したソース(<span className="font-mono text-xs">{sourceSha?.slice(0, 7)}</span>)がブランチ{" "}
+          <span className="font-mono text-xs">{drift.branch}</span> の先端(
+          <span className="font-mono text-xs">{drift.tip.slice(0, 7)}</span>
+          )の祖先ではありません(rebase または巻き戻し)。{DELTA_CONFIRM_LABEL}の対象外 —
+          いまの先端で証拠を取り直して judge し直してください。
+        </p>
+      ) : (
+        <>
+          <p>
+            検証したソース(<span className="font-mono text-xs">{sourceSha?.slice(0, 7)}</span>)の後に、ブランチ{" "}
+            <span className="font-mono text-xs">{drift.branch}</span> へ{drift.commits.length}
+            コミット積まれています。判定はそのソースに対するものです。
+            <strong>推奨はいまの先端での再検証(エージェントに取り直しを依頼)</strong>。
+            差分を自分の目で見て、判定が引き続き有効だと言えるときだけ引き受けてください。
+          </p>
+          <ul className="grid gap-0.5 rounded-lg bg-black/4 p-2 font-mono text-[11.5px] dark:bg-white/5">
+            {drift.commits.map((c) => (
+              <li key={c.sha} className="[overflow-wrap:anywhere]">
+                {c.sha.slice(0, 7)} {c.subject}
+              </li>
+            ))}
+          </ul>
+          {report.state === "passed" && (
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                id={`drift-note-${report.reportId}`}
+                name="driftNote"
+                className="min-w-0 flex-1 rounded-lg border border-black/15 bg-white/70 px-2.5 py-1.5 text-[13px] outline-none focus:border-amber-600/70 dark:border-white/15 dark:bg-white/5"
+                placeholder="差分の何を見てどう判断したか(記録の顔になる)"
+                value={note}
+                disabled={busy}
+                onChange={(e) => setNote(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && note.trim() !== "" && !busy) setDialogOpen(true);
+                }}
+              />
+              <button
+                className="cursor-pointer rounded-lg border border-amber-600/60 bg-amber-500/15 px-3 py-1.5 text-[13px] font-semibold text-amber-800 transition-colors hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-200"
+                disabled={busy || note.trim() === ""}
+                onClick={() => setDialogOpen(true)}
+              >
+                {busy ? "記録中…" : "差分を確認して引き受ける"}
+              </button>
+            </div>
+          )}
+          {outcome !== null && <p className="text-[12.5px] [overflow-wrap:anywhere]">{outcome}</p>}
+          <ActionDialog
+            open={dialogOpen}
+            title={`${DELTA_CONFIRM_LABEL}を記録しますか?`}
+            description={
+              <>
+                報告「{report.title}」の判定を、検証したソース{" "}
+                <span className="font-mono text-xs">{sourceSha?.slice(0, 7)}</span> からブランチ先端{" "}
+                <span className="font-mono text-xs">{drift.tip.slice(0, 7)}</span> まで({drift.commits.length}
+                コミット)人間の責任で引き受けます。
+                <br />
+                記録は報告に残り、自動で再判定されて提出できるようになります(submit の照合自体は変わりません)。
+              </>
+            }
+            actionLabel="引き受ける"
+            busy={busy}
+            onConfirm={() => void record()}
+            onClose={() => setDialogOpen(false)}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+// 差分確認(人間の引き受け)の導線 — 旧報告(ブランチ記録なし)向けのフォールバック。
+// ずれの導出ができないので、開いたときに作業場基準の判断材料を取りに行く。
+// 推奨は取り直し(いまの先端で再検証)— 引き受けは人間の責任であることを文面で明示する。
 // 記録は報告に残り自動で再判定され、sourceSha が進む(submit の三点照合は変えない)
 interface DeltaPreview {
   fromSha: string;

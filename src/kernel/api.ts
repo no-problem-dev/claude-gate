@@ -1,6 +1,6 @@
 import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { commitsBetween, gitBranch, gitSha, isAncestor } from "../ios/git.js";
+import { branchTip, commitsBetween, gitBranch, gitSha, isAncestor } from "../ios/git.js";
 import { checkRunHeadline } from "../ios/log_summary.js";
 import { reportGroup } from "../ios/words.js";
 import { unresolvedRejections } from "./attention.js";
@@ -15,6 +15,18 @@ export type EvidenceView = Evidence & {
   headline?: string;
   usedBy?: { reportId: string; reportTitle: string; behaviorIndex: number }[];
 };
+
+// ずれ: 検証したソースの後に、報告の作業ブランチへ積まれたコミット。
+// 人間の動きは非同期(検証は過去・確認はさっき・提出はいま)なので、状態ではなく導出として
+// 毎回計算し、発生した瞬間からカードに出す — 提出の門で初めて発覚させない
+export interface SourceDrift {
+  branch: string;
+  tip: string; // ブランチ先端
+  ancestorOk: boolean; // false = rebase/巻き戻し(差分確認の対象外)
+  commits: { sha: string; subject: string }[];
+}
+
+export type ReportView = Report & { drift?: SourceDrift };
 
 // ダッシュボードの読み取りモデル。ゲートの状態(~/.claude-gate)を人間向けに集約する。
 // 書き込みは一切しない: 状態を変えられるのは MCP ツールだけ。
@@ -58,7 +70,7 @@ export interface RepoDetail {
   repoKey: string;
   name: string;
   commonDir: string;
-  reports: Report[];
+  reports: ReportView[];
   builds: Build[];
   evidence: EvidenceView[];
   events: GateEvent[];
@@ -142,11 +154,31 @@ export function overview(): { repos: RepoSummary[] } {
   return { repos };
 }
 
+// ずれの導出: 判定済みで未終着の報告について、検証したソースと作業ブランチ先端を比較する
+function deriveDrift(worksite: string | null, report: Report): SourceDrift | undefined {
+  if (worksite === null || report.branch === undefined || report.state === "submitted") return undefined;
+  const sourceSha = report.judgment?.sourceSha ?? null;
+  if (sourceSha === null) return undefined;
+  const tip = branchTip(worksite, report.branch);
+  if (tip === null || tip === sourceSha) return undefined;
+  const ancestorOk = isAncestor(worksite, sourceSha, tip);
+  return {
+    branch: report.branch,
+    tip,
+    ancestorOk,
+    commits: ancestorOk ? commitsBetween(worksite, sourceSha, tip) : [],
+  };
+}
+
 export function repoDetail(repoKey: string): RepoDetail | null {
   const entry = readRegistry()[repoKey];
   if (!entry) return null;
+  const worksite = worksitePathOf(repoKey);
   const repoDir = join(gateHome(), "repos", repoKey);
-  const reports = readRecords<Report>(join(repoDir, "reports"));
+  const reports: ReportView[] = readRecords<Report>(join(repoDir, "reports")).map((report) => {
+    const drift = deriveDrift(worksite, report);
+    return drift !== undefined ? { ...report, drift } : report;
+  });
   const builds = readRecords<Build>(join(repoDir, "builds"));
   const usedBy = new Map<string, { reportId: string; reportTitle: string; behaviorIndex: number }[]>();
   for (const report of reports) {
@@ -196,13 +228,22 @@ export function deltaPreview(repoKey: string, reportId: string): DeltaPreview {
   if (report === null) return { error: "報告が見つからない" };
   const fromSha = report.judgment?.sourceSha ?? null;
   if (fromSha === null) return { error: "検証したソースが確定していない(未判定・dirty 検証・旧形式)" };
-  const toSha = gitSha(worksite);
-  if (toSha === null) return { error: "作業場の HEAD が解決できない" };
+  // 引き受け先は報告の作業ブランチ先端(ローカルのチェックアウト状態に依存しない)。
+  // 旧報告(ブランチ記録なし)は作業場の HEAD にフォールバック
+  const toSha = report.branch !== undefined ? branchTip(worksite, report.branch) : gitSha(worksite);
+  if (toSha === null) {
+    return {
+      error:
+        report.branch !== undefined
+          ? `作業ブランチ「${report.branch}」が見つからない(削除・改名されていないか確認してください)`
+          : "作業場の HEAD が解決できない",
+    };
+  }
   const ancestorOk = fromSha === toSha || isAncestor(worksite, fromSha, toSha);
   return {
     fromSha,
     toSha,
-    branch: gitBranch(worksite),
+    branch: report.branch ?? gitBranch(worksite),
     ancestorOk,
     commits: ancestorOk ? commitsBetween(worksite, fromSha, toSha) : [],
   };

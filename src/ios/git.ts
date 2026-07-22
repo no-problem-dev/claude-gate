@@ -27,6 +27,19 @@ export function gitBranch(worksitePath: string): string | null {
   }
 }
 
+// ブランチ先端(共有リポジトリの実体)。refs は全 worktree で共有されるので、
+// worksitePath がどのチェックアウトでも同じ値になる — 公式の遷移はローカルの状態に依存しない
+export function branchTip(worksitePath: string, branch: string): string | null {
+  try {
+    return execFileSync("git", ["-C", worksitePath, "rev-parse", "--verify", `refs/heads/${branch}^{commit}`], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
 // 参照(短縮 sha・ブランチ名等)を完全な commit ID に解決する
 export function resolveSha(worksitePath: string, ref: string): string | null {
   try {

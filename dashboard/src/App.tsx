@@ -11,7 +11,7 @@ import {
   foldReportStateEvents,
   reportGroup,
 } from "./lib";
-import { ReportLink, Time } from "./components";
+import { ReportLink, Time, WriteLockProvider } from "./components";
 import { BuildsTab } from "./BuildsTab";
 import { EvidenceTab } from "./EvidenceTab";
 import { ActivityFilter, ActivityTab } from "./ActivityTab";
@@ -126,6 +126,7 @@ export function App() {
   const hasUnresolvedReject = (detail?.unresolvedRejections.length ?? 0) > 0;
 
   return (
+    <WriteLockProvider>
     <div className="grid min-h-screen grid-cols-1 md:grid-cols-[272px_1fr]">
       <aside className="flex flex-col border-r border-black/10 bg-white/60 md:sticky md:top-0 md:h-screen md:overflow-y-auto dark:border-white/10 dark:bg-white/3">
         <div className="flex items-center gap-3 px-4 pt-5 pb-4">
@@ -312,6 +313,7 @@ export function App() {
         />
       )}
     </div>
+    </WriteLockProvider>
   );
 }
 

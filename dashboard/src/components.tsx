@@ -1,5 +1,5 @@
 import { Button, Chip } from "@heroui/react";
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { CSSProperties, createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
   Build,
   Evidence,
@@ -16,6 +16,62 @@ import {
 
 // 共有部品はこのファイルに集約する(タブのファイルに共有部品を定義しない — docs/dashboard-design.md「表現基盤」)。
 // チップは3型: 状態(意味色)/ 分類(中立のアウトライン)/ 識別(ビルドのリング)。役割の違うものを同じ見た目にしない
+
+// ---- 書き込みロック(書き込みは直列 — docs/dashboard-design.md「やらないこと」) ----
+// 非同期の書き込み(人間確認・差分確認・提出)が実行中は、全面のローディングを出して
+// 全ての操作を受け付けない。各フォームは個別の busy を持たず、このロック1本に合流する。
+// 読み取り(ポーリング)は止めない
+
+interface WriteLock {
+  writing: boolean;
+  runWrite: (fn: () => Promise<void>) => Promise<void>;
+}
+
+const WriteLockContext = createContext<WriteLock | null>(null);
+
+export function useWriteLock(): WriteLock {
+  const lock = useContext(WriteLockContext);
+  if (lock === null) throw new Error("WriteLockProvider の外で useWriteLock が呼ばれた");
+  return lock;
+}
+
+export function WriteLockProvider({ children }: { children: React.ReactNode }) {
+  const [writing, setWriting] = useState(false);
+  // 実行中の再入は受け付けない。通常は全面の覆いが操作を止めているので来ない(二重防御)
+  const writingRef = useRef(false);
+  const runWrite = useCallback(async (fn: () => Promise<void>) => {
+    if (writingRef.current) return;
+    writingRef.current = true;
+    setWriting(true);
+    try {
+      await fn();
+    } finally {
+      writingRef.current = false;
+      setWriting(false);
+    }
+  }, []);
+  return (
+    <WriteLockContext.Provider value={{ writing, runWrite }}>
+      {children}
+      {writing && (
+        <div
+          className="fixed inset-0 z-30 grid place-items-center bg-black/35"
+          role="status"
+          aria-live="polite"
+          aria-label="書き込み中"
+        >
+          <div className="bg-background flex items-center gap-3 rounded-2xl px-5 py-4 shadow-2xl">
+            <span
+              aria-hidden
+              className="size-5 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent"
+            />
+            <span className="text-[13px] font-medium">書き込み中…</span>
+          </div>
+        </div>
+      )}
+    </WriteLockContext.Provider>
+  );
+}
 
 // ---- 状態(StateChip) ----
 

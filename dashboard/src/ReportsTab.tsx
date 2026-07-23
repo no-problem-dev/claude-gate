@@ -27,6 +27,7 @@ import {
   SectionTitle,
   TaxonomyChip,
   Time,
+  useWriteLock,
 } from "./components";
 
 // 完了報告タブ: この仕組みの主役オブジェクト。
@@ -342,7 +343,7 @@ function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail })
   const targets = report.judgment?.behaviors.filter((b) => b.verdict === "unconfirmed").map((b) => b.index) ?? [];
   const [selected, setSelected] = useState<number | null>(null);
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
+  const { writing: busy, runWrite } = useWriteLock();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [outcome, setOutcome] = useState<string | null>(null);
 
@@ -353,30 +354,30 @@ function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail })
   const command = `claude-gate confirm "${worksite}" --report "${report.title}" --behavior ${target} --note "確認した内容"`;
 
   const record = async () => {
-    setBusy(true);
     setOutcome(null);
-    try {
-      const res = await fetch("/api/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          repoKey: detail.repoKey,
-          reportId: report.reportId,
-          behaviorIndex: target,
-          note: note.trim(),
-        }),
-      });
-      const body = (await res.json()) as { status: string; note?: string; reason?: string };
-      if (body.status === "ok") {
-        setOutcome(`✓ ${body.note ?? "記録した"}`);
-        setNote("");
-      } else {
-        setOutcome(`✕ ${body.reason ?? "記録できなかった"}`);
+    await runWrite(async () => {
+      try {
+        const res = await fetch("/api/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            repoKey: detail.repoKey,
+            reportId: report.reportId,
+            behaviorIndex: target,
+            note: note.trim(),
+          }),
+        });
+        const body = (await res.json()) as { status: string; note?: string; reason?: string };
+        if (body.status === "ok") {
+          setOutcome(`✓ ${body.note ?? "記録した"}`);
+          setNote("");
+        } else {
+          setOutcome(`✕ ${body.reason ?? "記録できなかった"}`);
+        }
+      } catch (error) {
+        setOutcome(`✕ 記録に失敗: ${String(error)}`);
       }
-    } catch (error) {
-      setOutcome(`✕ 記録に失敗: ${String(error)}`);
-    }
-    setBusy(false);
+    });
     setDialogOpen(false);
   };
 
@@ -454,28 +455,28 @@ function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail })
 // 条件はエージェント経由と同一(合格していること)— 入口が違うだけで門は同じ
 function SubmitAction({ report, detail }: { report: Report; detail: RepoDetail }) {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const { writing: busy, runWrite } = useWriteLock();
   const [outcome, setOutcome] = useState<string | null>(null);
 
   const run = async () => {
-    setBusy(true);
     setOutcome(null);
-    try {
-      const res = await fetch("/api/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoKey: detail.repoKey, reportId: report.reportId }),
-      });
-      const body = (await res.json()) as { status: string; note?: string; reason?: string; fix?: string };
-      if (body.status === "ok") {
-        setOutcome(`✓ ${body.note ?? "提出した"}`);
-      } else {
-        setOutcome(`✕ ${body.reason ?? "提出できなかった"}${body.fix !== undefined ? ` — 直し方: ${body.fix}` : ""}`);
+    await runWrite(async () => {
+      try {
+        const res = await fetch("/api/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repoKey: detail.repoKey, reportId: report.reportId }),
+        });
+        const body = (await res.json()) as { status: string; note?: string; reason?: string; fix?: string };
+        if (body.status === "ok") {
+          setOutcome(`✓ ${body.note ?? "提出した"}`);
+        } else {
+          setOutcome(`✕ ${body.reason ?? "提出できなかった"}${body.fix !== undefined ? ` — 直し方: ${body.fix}` : ""}`);
+        }
+      } catch (error) {
+        setOutcome(`✕ 提出に失敗: ${String(error)}`);
       }
-    } catch (error) {
-      setOutcome(`✕ 提出に失敗: ${String(error)}`);
-    }
-    setBusy(false);
+    });
     setDialogOpen(false);
   };
 
@@ -551,17 +552,18 @@ async function postConfirmDelta(
 function DriftNotice({ report, detail }: { report: Report; detail: RepoDetail }) {
   const drift = report.drift;
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
+  const { writing: busy, runWrite } = useWriteLock();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [outcome, setOutcome] = useState<string | null>(null);
   if (drift === undefined) return null;
   const sourceSha = report.judgment?.sourceSha ?? null;
 
   const record = async () => {
-    setBusy(true);
-    setOutcome(await postConfirmDelta(detail.repoKey, report.reportId, drift.tip, note.trim()));
-    setNote("");
-    setBusy(false);
+    setOutcome(null);
+    await runWrite(async () => {
+      setOutcome(await postConfirmDelta(detail.repoKey, report.reportId, drift.tip, note.trim()));
+      setNote("");
+    });
     setDialogOpen(false);
   };
 
@@ -651,7 +653,7 @@ interface DeltaPreview {
 function DeltaConfirmSection({ report, detail }: { report: Report; detail: RepoDetail }) {
   const [preview, setPreview] = useState<DeltaPreview | { error: string } | null>(null);
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
+  const { writing: busy, runWrite } = useWriteLock();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [outcome, setOutcome] = useState<string | null>(null);
 
@@ -666,30 +668,30 @@ function DeltaConfirmSection({ report, detail }: { report: Report; detail: RepoD
 
   const record = async () => {
     if (preview === null || "error" in preview) return;
-    setBusy(true);
     setOutcome(null);
-    try {
-      const res = await fetch("/api/confirm-delta", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          repoKey: detail.repoKey,
-          reportId: report.reportId,
-          toSha: preview.toSha,
-          note: note.trim(),
-        }),
-      });
-      const body = (await res.json()) as { status: string; note?: string; reason?: string; fix?: string };
-      if (body.status === "ok") {
-        setOutcome(`✓ ${body.note ?? "記録した"}`);
-        setNote("");
-      } else {
-        setOutcome(`✕ ${body.reason ?? "記録できなかった"}${body.fix !== undefined ? ` — 直し方: ${body.fix}` : ""}`);
+    await runWrite(async () => {
+      try {
+        const res = await fetch("/api/confirm-delta", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            repoKey: detail.repoKey,
+            reportId: report.reportId,
+            toSha: preview.toSha,
+            note: note.trim(),
+          }),
+        });
+        const body = (await res.json()) as { status: string; note?: string; reason?: string; fix?: string };
+        if (body.status === "ok") {
+          setOutcome(`✓ ${body.note ?? "記録した"}`);
+          setNote("");
+        } else {
+          setOutcome(`✕ ${body.reason ?? "記録できなかった"}${body.fix !== undefined ? ` — 直し方: ${body.fix}` : ""}`);
+        }
+      } catch (error) {
+        setOutcome(`✕ 記録に失敗: ${String(error)}`);
       }
-    } catch (error) {
-      setOutcome(`✕ 記録に失敗: ${String(error)}`);
-    }
-    setBusy(false);
+    });
     setDialogOpen(false);
   };
 

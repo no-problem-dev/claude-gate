@@ -451,7 +451,7 @@ function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail })
 }
 
 // 提出待ち(合格)の解決導線: 人間がダッシュボードから提出を記録できる。
-// 提出は記録だけの状態遷移(検証したソースを受け入れた事実)で、世界への実行を含まない。
+// 提出は記録だけの状態遷移(検証したソースを受け入れた事実)で、git・GitHub への書き込みを含まない。
 // 条件はエージェント経由と同一(合格していること)— 入口が違うだけで門は同じ
 function SubmitAction({ report, detail }: { report: Report; detail: RepoDetail }) {
   const [dialogOpen, setDialogOpen] = useState(false);

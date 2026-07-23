@@ -14,7 +14,7 @@ import { submit } from "../src/ios/tools/submit.js";
 // 提出は記録だけ(抽象と具体の分離): 検証したソースを受け入れたと記録する状態遷移で、
 // git push も gh も実行しない。取り込みに向かう操作のガードは消費者(hook)の領分 —
 // guard_official.test.ts が照会分岐を固定する。
-// ここでのゴールデンは「提出しても世界が変わらない」: bare リモートの参照が動かず、
+// ここでのゴールデンは「提出しても git・GitHub が変わらない」: bare リモートの参照が動かず、
 // PATH に置いた監視付きの偽 gh が一度も呼ばれない
 
 let worksite: string;
@@ -40,7 +40,7 @@ function commitAll(message: string): void {
   execFileSync("git", ["-C", worksite, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", message]);
 }
 
-// 世界が変わっていないことの観測: bare リモートに参照が1つも無い(show-ref は参照ゼロのとき exit 1)
+// git が変わっていないことの観測: bare リモートに参照が1つも無い(show-ref は参照ゼロのとき exit 1)
 function bareRefs(): string {
   try {
     return execFileSync("git", ["-C", bare, "show-ref"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -126,7 +126,7 @@ describe("submit — 記録だけの状態遷移", () => {
     expect(result.state.submission?.recordedAt).toBeDefined();
   });
 
-  it("ゴールデン: 提出しても世界が変わらない(push されず、gh も呼ばれない)", () => {
+  it("ゴールデン: 提出しても git・GitHub が変わらない(push されず、gh も呼ばれない)", () => {
     const reportId = passedReport();
     const result = submit({ worksitePath: worksite, reportId });
     expect(result.status).toBe("ok");
@@ -172,7 +172,7 @@ describe("submit — 記録だけの状態遷移", () => {
   });
 
   // ずれ(検証後に積まれたコミット)は提出を止めない: 提出の記録は「検証したソース X を受け入れた」で
-  // あり、X は変わらない。世界との一致のガードは取り込みに向かう操作の瞬間に消費者(hook)が行う
+  // あり、X は変わらない。origin との一致のガードは取り込みに向かう操作の瞬間に消費者(hook)が行う
   it("検証後にコミットが積まれても、提出は検証したソースの sha で記録される", () => {
     const reportId = passedReport();
     const verified = git("rev-parse", "HEAD");

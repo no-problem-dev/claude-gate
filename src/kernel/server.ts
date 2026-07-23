@@ -241,7 +241,7 @@ app.post("/api/confirm", (req, res) => {
 });
 
 // 提出の記録(人間がダッシュボードから)。条件はエージェント経由と同一(合格していること) —
-// 提出は記録だけで世界への実行を含まない(入口が違うだけで門は同じ。監査に via: dashboard が残る)
+// 提出は記録だけで git・GitHub への書き込みを含まない(入口が違うだけで門は同じ。監査に via: dashboard が残る)
 app.post("/api/submit", (req, res) => {
   const { repoKey, reportId } = (req.body ?? {}) as Record<string, unknown>;
   if (typeof repoKey !== "string" || !/^[0-9a-f]{12}$/.test(repoKey) || typeof reportId !== "string") {

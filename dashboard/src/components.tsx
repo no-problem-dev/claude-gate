@@ -103,7 +103,7 @@ export function DirtyChip() {
   );
 }
 
-// 報告の状態チップ。終着(提出済み)は塗りではなくアウトライン — 「終わった静けさ」を形で表す
+// 報告の状態チップ。終着(提出済み)は塗りではなくアウトライン — 完了済みで注意は不要、を形で表す
 export function ReportStateChip({ state }: { state: ReportState }) {
   if (state === "submitted") {
     return (

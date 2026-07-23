@@ -31,7 +31,7 @@ const CATEGORY_COLOR: Record<ConceptCategory, string> = {
   vocabulary: "oklch(0.60 0.12 210)", // シアン
   derived: "oklch(0.62 0.19 330)", // マゼンタ
   operation: "oklch(0.58 0.15 275)", // 藍
-  world: "oklch(0.60 0.11 190)", // 青緑
+  external: "oklch(0.60 0.11 190)", // 青緑
 };
 
 // 面塗りは分類色のうすい重ね(色相の識別を面でも支える。枠線だけだと一覧性が落ちる)

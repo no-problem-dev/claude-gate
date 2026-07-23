@@ -27,7 +27,7 @@ export interface SourceDrift {
 }
 
 // 取り込みの状態(導出): 提出済みの報告について、受け入れた sha が origin のデフォルトブランチに
-// 入ったか。保存しない — 世界のいまの姿は毎回世界に聞く。
+// 入ったか。保存しない — origin のいまの状態は毎回問い合わせる。
 // 正直な限界: origin の参照はこのマシンが最後に取得した時点の姿
 export interface AdoptionStatus {
   defaultBranch: string;

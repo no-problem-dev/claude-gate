@@ -132,7 +132,7 @@ describe("取り込みの状態(導出)", () => {
     // origin/main を受け入れた sha を含まない別系譜のコミットに向ける
     const orphan = execFileSync(
       "git",
-      ["-C", worksite, "commit-tree", `${sha}^{tree}`, "-m", "unrelated"],
+      ["-C", worksite, "-c", "user.email=t@t", "-c", "user.name=t", "commit-tree", `${sha}^{tree}`, "-m", "unrelated"],
       { encoding: "utf8" },
     ).trim();
     setOriginMain(orphan);

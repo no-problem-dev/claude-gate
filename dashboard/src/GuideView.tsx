@@ -123,7 +123,7 @@ export function GuideView() {
           </Step>
           <Step n={8} name="提出" en="submit">
             検証と人間確認が終わった合格報告を、<strong>「検証したソースを受け入れた」と記録する</strong>。
-            提出は記録だけの状態遷移で、push も gh も実行しない(ゲートは世界を読むが変えない)。
+            提出は記録だけの状態遷移で、push も gh も実行しない(ゲートは git・GitHub を読むだけで、書き込まない)。
             取り込みに向かう操作 — レビュー可能化(gh pr ready)・merge・デフォルトブランチへの push —
             は、この記録に依存するガード(hook・ブランチ保護・人間)が守る:
             レビュー可能化はブランチ先端がこの記録と一致するときだけ通り、
@@ -133,7 +133,7 @@ export function GuideView() {
         </ol>
         <div className="mt-3 flex flex-wrap gap-2">
           <Chip size="sm" color="default">実行は自由、採用は厳格</Chip>
-          <Chip size="sm" color="default">ゲートは世界を読むが、変えない</Chip>
+          <Chip size="sm" color="default">ゲートは git・GitHub を読むだけで、書き込まない</Chip>
           <Chip size="sm" color="default">すべての操作はべき等(何度呼んでも安全)</Chip>
           <Chip size="sm" color="default">記録は不変(拒否も含めて全部残る)</Chip>
         </div>
@@ -188,7 +188,7 @@ export function GuideView() {
           <p className="text-[14px] leading-relaxed">
             命名の決まりは3つ。<strong>日本語の日常語が正式名</strong>。実装用の英語識別子と
             1:1 の対訳表を持つ(表にない語は実装に登場できない)。<strong>比喩は使わない</strong>
-            (「指紋」は分かりにくいので「ビルドID」に改名した、という実例からの決まり)。
+            (比喩で名付けて分かりにくくなり、「ビルドID」への改名で直した実例からの決まり)。
           </p>
         </Card>
         <Card className="overflow-hidden p-0">
@@ -285,7 +285,7 @@ export function GuideView() {
             <strong>ずれは状態ではなく導出</strong>(検証したソースの後にブランチへ積まれたコミット。
             合格のまま起きて、差分確認か取り直しで合格のまま解消される)。
             <strong>提出済みの先も導出</strong>(受け入れた sha がデフォルトブランチに入ったかは
-            世界のいまの姿なので、保存せず毎回確かめる)。
+            origin のいまの状態なので、保存せず毎回確かめる)。
             「確認できず」は失敗ではなく、人間に渡すための正式な出口。
           </p>
         </Card>
@@ -327,7 +327,7 @@ export function GuideView() {
             見えないこと台帳。見えない動作への OK は「確認できず」に変換され、人間に渡る
           </StatusRow>
           <StatusRow chip={<Chip size="sm" color="success">稼働中</Chip>} name="提出(記録)とガード(スライス3)+ 掃除(2c)">
-            提出は「検証したソースを受け入れた」の記録だけ(世界への実行を含まない)。
+            提出は「検証したソースを受け入れた」の記録だけ(git・GitHub への書き込みを含まない)。
             取り込みに向かう操作は提出の記録に依存するガードが守る: レビュー可能化はブランチ先端が
             記録と一致するときだけ hook が通し、merge とデフォルトブランチへの push は人間だけ。
             記録の掃除は人間の CLI(claude-gate forget)— エージェントは記録を消せない

@@ -218,19 +218,16 @@ export interface DeltaConfirmation {
 export const ENTERED_DEFAULT_BRANCH_LABEL = "デフォルトブランチに入った";
 export const AWAITING_ADOPTION_LABEL = "取り込み待ち";
 
-// 提出の記録: submit が報告に保存する(FSM の終着)。
-// 記録だけであり、push・レビュー可能化はしない。remote / prNumber / prUrl / readiedAt / pushedAt は
-// 旧形式(提出が push やドラフト解除を実行していた頃)の記録にだけ残る
+// 提出の記録: submit が報告に保存する(FSM の終着)。記録だけであり、push・レビュー可能化はしない。
+// readiedAt / pushedAt は旧記録(提出が世界への実行を含んでいた頃)の時刻 —
+// 読み取りモデル(kernel/api.ts)が recordedAt に正規化するためだけに型に残す
 export interface Submission {
   sha: string; // 受け入れた検証済みソース(judgment.sourceSha の転記)
   branch?: string; // 報告の作業ブランチ(記録があるもののみ)
-  recordedAt?: string; // 提出を記録した時刻(新形式)
+  recordedAt?: string; // 提出を記録した時刻
   via?: "dashboard"; // 入口(省略 = MCP / CLI)。監査と同じく経路を残す
-  remote?: string; // 旧形式のみ
-  prNumber?: number; // 旧形式(提出 = ドラフト解除)のみ
-  prUrl?: string;
-  readiedAt?: string; // 旧形式: ドラフト解除の時刻
-  pushedAt?: string; // 旧形式(提出 = push)のみ
+  readiedAt?: string; // 旧記録の時刻(正規化用)
+  pushedAt?: string; // 旧記録の時刻(正規化用)
 }
 
 // 完了報告: エージェントの「できました」の型。動作一覧はオープン時に固定(変えたいなら別の作業名で開く)

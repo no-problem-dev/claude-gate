@@ -78,7 +78,7 @@ export function submit(args: SubmitArgs): Reply<Report> {
   };
   writeJson(join(gateDir, "reports", `${report.reportId}.json`), report);
   // 原因のできごとが結果(報告の状態)を運ぶ。独立した report_state 行は書かない。
-  // branch は載せない(報告の記録が持つ。旧形式の push イベントとの区別にも使う)
+  // branch は載せない(報告の記録が持つ)
   appendEvent(gateDir, {
     tool: "submit",
     result: "ok",

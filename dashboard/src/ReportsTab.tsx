@@ -188,28 +188,10 @@ function ReportCard({
       {report.submission !== undefined && (
         <div className="mt-3 grid gap-1.5 rounded-xl border border-green-600/30 bg-green-600/8 p-3 text-[13px]">
           <p>
-            {report.submission.prNumber !== undefined ? (
-              <>
-                <a href={report.submission.prUrl} target="_blank" rel="noreferrer" className="underline">
-                  PR #{report.submission.prNumber}
-                </a>
-                (先頭 <span className="font-mono">{report.submission.sha.slice(0, 7)}</span>)をレビュー可能にした(
-                {formatTime(report.submission.readiedAt ?? "")})。旧形式(提出がドラフト解除を実行していた頃)の記録。
-              </>
-            ) : report.submission.pushedAt !== undefined ? (
-              <>
-                {report.submission.remote}/{report.submission.branch} へ{" "}
-                <span className="font-mono">{report.submission.sha.slice(0, 7)}</span> を push 済み(
-                {formatTime(report.submission.pushedAt)})。旧形式(提出 = push)の記録。
-              </>
-            ) : (
-              <>
-                検証したソース <span className="font-mono">{report.submission.sha.slice(0, 7)}</span>{" "}
-                を受け入れたと記録した({formatTime(report.submission.recordedAt ?? "")}
-                {report.submission.via === "dashboard" && "・ダッシュボードから"})。
-                取り込みに向かう操作(レビュー可能化・merge・デフォルトブランチへの push)はこの記録と照合される。
-              </>
-            )}
+            検証したソース <span className="font-mono">{report.submission.sha.slice(0, 7)}</span>{" "}
+            を受け入れたと記録した({formatTime(report.submission.recordedAt ?? "")}
+            {report.submission.via === "dashboard" && "・ダッシュボードから"})。
+            取り込みに向かう操作(レビュー可能化・merge・デフォルトブランチへの push)はこの記録と照合される。
           </p>
           {report.adoption !== undefined &&
             (report.adoption.entered ? (

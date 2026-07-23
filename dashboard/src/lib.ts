@@ -59,8 +59,6 @@ export interface GateEvent {
   exitCode?: number;
   verdict?: string;
   sha?: string;
-  branch?: string;
-  prNumber?: number;
   fromSha?: string; // 差分確認(confirm_delta)のみ
   toSha?: string; // 差分確認(confirm_delta)のみ
   commits?: number; // 差分確認(confirm_delta)のみ: 引き受けたコミット数
@@ -147,18 +145,13 @@ export interface DeltaConfirmation {
   confirmedAt: string;
 }
 
-// 提出の記録(src/ios/words.ts と 1:1)。記録だけであり、push・レビュー可能化はしない。
-// remote / prNumber / prUrl / readiedAt / pushedAt は旧形式(提出が世界への実行を含んでいた頃)のみ
+// 提出の記録。記録だけであり、push・レビュー可能化はしない。
+// 旧記録の時刻はサーバーの読み取りモデルが recordedAt に正規化して返す
 export interface Submission {
   sha: string; // 受け入れた検証済みソース
   branch?: string;
-  recordedAt?: string; // 提出を記録した時刻(新形式)
+  recordedAt?: string; // 提出を記録した時刻
   via?: string;
-  remote?: string; // 旧形式のみ
-  prNumber?: number; // 旧形式(提出 = ドラフト解除)のみ
-  prUrl?: string;
-  readiedAt?: string;
-  pushedAt?: string; // 旧形式(提出 = push)のみ
 }
 
 // 取り込みの状態(サーバーの読み取りモデルの導出。保存されない):
@@ -374,8 +367,6 @@ export function eventSentence(event: GateEvent): string {
   if (event.tool === "submit") {
     if (event.result !== "ok") return "提出を拒否";
     if (event.alreadySubmitted) return "提出(既提出の返却)";
-    if (event.prNumber !== undefined) return `提出した — PR #${event.prNumber} をレビュー可能にした(旧形式)`;
-    if (event.branch !== undefined) return `提出した — ${event.branch} を push(旧形式)`;
     return "提出を記録した — 検証したソースを受け入れ";
   }
   if (event.tool === "confirm") {

@@ -203,12 +203,29 @@ export function submittedRecord(
   return hit === undefined ? { submitted: false } : { submitted: true, reportId: hit.reportId, title: hit.title };
 }
 
+// 提出の記録の正規化: 旧記録(提出が push やドラフト解除を実行していた頃)の時刻・余分なフィールドを
+// 現行の形に写す。保存された記録は不変のまま、読み取りモデルだけが最新の語彙で見せる
+function normalizeSubmission(report: Report): Report {
+  if (report.submission === undefined) return report;
+  const s = report.submission;
+  return {
+    ...report,
+    submission: {
+      sha: s.sha,
+      ...(s.branch !== undefined && { branch: s.branch }),
+      recordedAt: s.recordedAt ?? s.readiedAt ?? s.pushedAt,
+      ...(s.via !== undefined && { via: s.via }),
+    },
+  };
+}
+
 export function repoDetail(repoKey: string): RepoDetail | null {
   const entry = readRegistry()[repoKey];
   if (!entry) return null;
   const worksite = worksitePathOf(repoKey);
   const repoDir = join(gateHome(), "repos", repoKey);
-  const reports: ReportView[] = readRecords<Report>(join(repoDir, "reports")).map((report) => {
+  const reports: ReportView[] = readRecords<Report>(join(repoDir, "reports")).map((raw) => {
+    const report = normalizeSubmission(raw);
     const drift = deriveDrift(worksite, report);
     const adoption = deriveAdoption(worksite, report);
     return {

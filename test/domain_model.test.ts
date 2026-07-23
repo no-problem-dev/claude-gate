@@ -3,7 +3,10 @@ import {
   CONCEPTS,
   DOMAIN_RELATIONS,
   RELATION_KIND_LABEL,
+  REPORT_STATE_LABEL,
+  REPORT_TRANSITIONS,
   type ConceptId,
+  type ReportState,
 } from "../src/ios/words";
 
 // モデル全体図のデータ(概念の台帳と関係の宣言)の整合性。
@@ -45,5 +48,37 @@ describe("ドメインモデルの宣言", () => {
     for (const r of DOMAIN_RELATIONS) {
       expect(RELATION_KIND_LABEL[r.kind].length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("完了報告の状態マシンの宣言", () => {
+  it("遷移に重複がない", () => {
+    const keys = REPORT_TRANSITIONS.map((t) => `${t.from}|${t.to}`);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("提出済みは終着 — 出ていく遷移が無い", () => {
+    expect(REPORT_TRANSITIONS.some((t) => t.from === "submitted")).toBe(false);
+  });
+
+  it("全状態が下書きから到達できる", () => {
+    const reachable = new Set<ReportState>(["draft"]);
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const t of REPORT_TRANSITIONS) {
+        if (reachable.has(t.from) && !reachable.has(t.to)) {
+          reachable.add(t.to);
+          grew = true;
+        }
+      }
+    }
+    for (const state of Object.keys(REPORT_STATE_LABEL) as ReportState[]) {
+      expect(reachable.has(state), `${REPORT_STATE_LABEL[state]}(${state})に到達できない`).toBe(true);
+    }
+  });
+
+  it("全遷移にできごとのラベルがある", () => {
+    for (const t of REPORT_TRANSITIONS) expect(t.label.trim().length).toBeGreaterThan(0);
   });
 });

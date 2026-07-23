@@ -95,6 +95,26 @@ export function reportGroup(state: ReportState): ReportGroup {
   return "active"; // 下書き・証拠あり・不合格 = 作業の続き
 }
 
+// 完了報告の状態マシン(遷移の宣言)。実装は report_link.ts(証拠の紐づけ)と judge / submit が担う —
+// ここは言語としての宣言で、ガイドの状態マシン図はこれをそのまま描く(図だけの情報を作らない)。
+// 提出済み(submitted)から出る遷移は無い(終着・不変)。ずれ・取り込み待ちは状態ではなく導出(DOMAIN_RELATIONS 側)
+export interface ReportTransition {
+  from: ReportState;
+  to: ReportState;
+  label: string; // 遷移を起こすできごと(日本語の文)
+}
+
+export const REPORT_TRANSITIONS: ReportTransition[] = [
+  { from: "draft", to: "evidenced", label: "証拠を受理" },
+  { from: "evidenced", to: "passed", label: "判定 — 全動作 OK" },
+  { from: "evidenced", to: "failed", label: "判定 — NG あり" },
+  { from: "evidenced", to: "unconfirmed", label: "判定 — 確認できず" },
+  { from: "failed", to: "evidenced", label: "直して証拠を集め直す" },
+  { from: "unconfirmed", to: "evidenced", label: "人間確認(証拠になる)" },
+  { from: "passed", to: "evidenced", label: "証拠が増えて判定は無効" },
+  { from: "passed", to: "submitted", label: "提出 — 記録だけの遷移" },
+];
+
 // 未解決(unresolved): 拒否のできごとに、その後の解消が無い状態。
 // 解消 = 同じ報告のその後の成功(どのツールでも)・報告の掃除・報告の終着。
 // 報告に紐づかない拒否は同じツールのその後の成功で解消。

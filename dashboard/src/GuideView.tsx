@@ -11,10 +11,11 @@ import {
   type ConceptId,
 } from "../../src/ios/words";
 import { SectionTitle } from "./components";
-import { LoopDiagram, ReportStateDiagram, VerifyDiagram } from "./Diagrams";
+import { LoopDiagram, VerifyDiagram } from "./Diagrams";
 
-// モデル全体図はグラフ描画(React Flow + ELK)を含むので遅延ロードする(ガイド本文を重くしない)
+// モデル全体図・状態マシン図はグラフ描画(React Flow + ELK)を含むので遅延ロードする(ガイド本文を重くしない)
 const DomainModelGraph = lazy(() => import("./DomainModelGraph"));
+const StateMachineDiagram = lazy(() => import("./StateMachineDiagram"));
 
 // ガイド: この仕組み(形式言語)の人間向け説明書。
 // 語彙の列挙(変更の種類・確かめ方・判定値)は words.ts をそのままレンダリングする(写しを持たない)。
@@ -249,6 +250,7 @@ export function GuideView() {
             下の図は言語の定義(概念の台帳と関係の宣言)をそのまま描いたもの —
             実線は 持つ / 参照する / 作る、破線は<strong>導出</strong>(保存せず毎回計算する)、
             点線は「証拠の一種」。関係を持たない語(作業場・未コミット変更あり等)は上の対訳表だけに出る。
+            <strong>概念にマウスを載せると、その概念と直接つながる関係だけが浮かぶ</strong>。
           </p>
           <Suspense
             fallback={
@@ -262,7 +264,34 @@ export function GuideView() {
         </Card>
       </section>
 
-      {/* ④'' ことばの続き */}
+      {/* ④'' 状態マシン: 完了報告の一生。words.ts の遷移宣言(REPORT_TRANSITIONS)のレンダリング */}
+      <section className="max-w-[1400px] pb-8">
+        <h3 className="mb-2 text-[13px] font-semibold">状態マシン — 完了報告の一生(全状態が稼働中)</h3>
+        <Card className="p-4">
+          <Suspense
+            fallback={
+              <div className="grid h-[420px] place-items-center text-[13px] text-zinc-500 dark:text-zinc-400">
+                状態マシンを読み込んでいます…
+              </div>
+            }
+          >
+            <StateMachineDiagram />
+          </Suspense>
+          <p className="mt-3 max-w-[760px] text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300">
+            状態はこの1本だけ。証拠を集めている間の試行錯誤は自由で、
+            <strong>状態から状態への移動だけ</strong>をゲートが決定論で判定する。
+            破線は戻りの遷移 — 判定済みの報告に証拠が増えると判定は無効になり「証拠あり」に戻る。
+            人間確認も証拠なので、この同じ経路で自動的に再判定される(特別な遷移は無い)。
+            <strong>ずれは状態ではなく導出</strong>(検証したソースの後にブランチへ積まれたコミット。
+            合格のまま起きて、差分確認か取り直しで合格のまま解消される)。
+            <strong>提出済みの先も導出</strong>(受け入れた sha がデフォルトブランチに入ったかは
+            世界のいまの姿なので、保存せず毎回確かめる)。
+            「確認できず」は失敗ではなく、人間に渡すための正式な出口。
+          </p>
+        </Card>
+      </section>
+
+      {/* ④''' ことばの続き */}
       <section className="max-w-[760px] pb-8">
         <Card className="p-4">
           <p className="text-[14px] leading-relaxed">
@@ -310,24 +339,6 @@ export function GuideView() {
             導出で常時カードに表示される
           </StatusRow>
         </div>
-        <h3 className="mt-6 mb-2 text-[13px] font-semibold">
-          全体像 — 完了報告の一生(全状態が稼働中)
-        </h3>
-        <Card className="p-4">
-          <ReportStateDiagram />
-          <p className="mt-2 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300">
-            状態はこの1本だけ。証拠を集めている間の試行錯誤は自由で、
-            <strong>状態から状態への移動だけ</strong>をゲートが決定論で判定する。
-            判定済みの報告に証拠が増えると判定は無効になり「証拠あり」に戻る —
-            人間確認も証拠なので、この同じ経路で自動的に再判定される(特別な遷移は無い)。
-            <strong>ずれは状態ではなく導出</strong>(検証したソースの後にブランチへ積まれたコミット。
-            合格のまま起きて、差分確認か取り直しで合格のまま解消される)。
-            <strong>提出済みの先も導出</strong>(受け入れた sha がデフォルトブランチに入ったかは
-            世界のいまの姿なので、保存せず毎回確かめる)。
-            「確認できず」は失敗ではなく、人間に渡すための正式な出口。
-          </p>
-        </Card>
-
         <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
           この画面は言語定義の人間向けの説明で、言語の変更と一緒に更新される。
         </p>

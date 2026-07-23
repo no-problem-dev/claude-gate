@@ -34,6 +34,14 @@ const CATEGORY_COLOR: Record<ConceptCategory, string> = {
   world: "oklch(0.60 0.11 190)", // 青緑
 };
 
+// 面塗りは分類色のうすい重ね(色相の識別を面でも支える。枠線だけだと一覧性が落ちる)
+const TINT = Object.fromEntries(
+  (Object.keys(CATEGORY_COLOR) as ConceptCategory[]).map((k) => [
+    k,
+    `color-mix(in oklab, ${CATEGORY_COLOR[k]} 12%, transparent)`,
+  ]),
+) as Record<ConceptCategory, string>;
+
 type ConceptNodeType = Node<{ id: ConceptId }, "concept">;
 
 function conceptSize(id: ConceptId): { width: number; height: number } {
@@ -47,7 +55,11 @@ function ConceptNode({ data }: NodeProps<ConceptNodeType>) {
   return (
     <div
       className="rounded-lg border bg-white px-3 py-1.5 text-center dark:bg-zinc-900"
-      style={{ borderColor: CATEGORY_COLOR[c.category], borderWidth: 1.5 }}
+      style={{
+        borderColor: CATEGORY_COLOR[c.category],
+        borderWidth: 1.5,
+        backgroundImage: `linear-gradient(${TINT[c.category]}, ${TINT[c.category]})`,
+      }}
     >
       <Handle type="target" position={Position.Top} className="!bg-transparent !border-0" />
       <div className="text-[13px] leading-tight font-semibold whitespace-nowrap">{c.ja}</div>
@@ -93,8 +105,8 @@ async function layout(): Promise<ConceptNodeType[]> {
     layoutOptions: {
       "elk.algorithm": "layered",
       "elk.direction": "DOWN",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "64",
-      "elk.spacing.nodeNode": "16",
+      "elk.layered.spacing.nodeNodeBetweenLayers": "84",
+      "elk.spacing.nodeNode": "22",
       "elk.layered.compaction.postCompaction.strategy": "LEFT",
       "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
       "elk.edgeRouting": "SPLINES",
@@ -112,8 +124,17 @@ async function layout(): Promise<ConceptNodeType[]> {
   }));
 }
 
+// ホバー中のノードの近傍(自分 + 直接つながる概念・関係)。密なグラフを「見たいところだけ」読めるようにする
+const NEIGHBORS = new Map<string, Set<string>>();
+for (const id of GRAPH_CONCEPTS) NEIGHBORS.set(id, new Set([id]));
+for (const e of VISUAL_EDGES) {
+  NEIGHBORS.get(e.source)?.add(e.target);
+  NEIGHBORS.get(e.target)?.add(e.source);
+}
+
 export default function DomainModelGraph() {
   const [nodes, setNodes] = useState<ConceptNodeType[] | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
     layout().then((n) => {
@@ -123,6 +144,22 @@ export default function DomainModelGraph() {
       alive = false;
     };
   }, []);
+
+  const visibleNodes = useMemo(() => {
+    if (!nodes) return null;
+    if (!hovered) return nodes;
+    const keep = NEIGHBORS.get(hovered)!;
+    return nodes.map((n) => (keep.has(n.id) ? n : { ...n, style: { opacity: 0.12 } }));
+  }, [nodes, hovered]);
+
+  const visibleEdges = useMemo(() => {
+    if (!hovered) return BASE_EDGES;
+    return BASE_EDGES.map((e) =>
+      e.source === hovered || e.target === hovered
+        ? { ...e, style: { ...e.style, strokeWidth: 2 } }
+        : { ...e, style: { ...e.style, opacity: 0.06 }, label: undefined },
+    );
+  }, [hovered]);
 
   const legend = useMemo(
     () =>
@@ -139,15 +176,17 @@ export default function DomainModelGraph() {
     <div>
       <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1">{legend}</div>
       <div className="h-[720px] rounded-lg border border-black/8 dark:border-white/8">
-        {nodes === null ? (
+        {visibleNodes === null ? (
           <div className="grid h-full place-items-center text-[13px] text-zinc-500 dark:text-zinc-400">
             全体図を配置しています…
           </div>
         ) : (
           <ReactFlow
-            nodes={nodes}
-            edges={BASE_EDGES}
+            nodes={visibleNodes}
+            edges={visibleEdges}
             nodeTypes={nodeTypes}
+            onNodeMouseEnter={(_, n) => setHovered(n.id)}
+            onNodeMouseLeave={() => setHovered(null)}
             colorMode="system"
             fitView
             minZoom={0.15}

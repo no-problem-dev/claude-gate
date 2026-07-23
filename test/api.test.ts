@@ -3,10 +3,12 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { evidenceFilePath, overview, repoDetail } from "../src/kernel/api.js";
+import { evidenceFilePath, overview, repoDetail, submittedRecord } from "../src/kernel/api.js";
 import { attachEvidence } from "../src/ios/tools/attach_evidence.js";
+import { judge } from "../src/ios/tools/judge.js";
 import { openReport } from "../src/ios/tools/open_report.js";
 import { registerBuild } from "../src/ios/tools/register_build.js";
+import { submit } from "../src/ios/tools/submit.js";
 
 // ダッシュボードの読み取りモデル: ツールが作った状態がそのまま人間向けに読めること
 
@@ -93,6 +95,68 @@ describe("repoDetail", () => {
 
   it("未知の repoKey は null", () => {
     expect(repoDetail("ffffffffffff")).toBeNull();
+  });
+});
+
+// 合格 → 提出済みまで通す(コミット済みのソース + スクショ証拠)
+function submittedReport(): { repoKey: string; reportId: string; sha: string } {
+  writeFileSync(join(worksite, "README.md"), "検証対象のソース");
+  execFileSync("git", ["-C", worksite, "add", "-A"]);
+  execFileSync("git", ["-C", worksite, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "init"]);
+  const { repoKey } = populate();
+  const detail = repoDetail(repoKey);
+  if (detail === null) throw new Error("expected detail");
+  const reportId = detail.reports[0].reportId;
+  const judged = judge({ worksitePath: worksite, reportId });
+  if (judged.status !== "ok" || judged.state.state !== "passed") throw new Error(`expected passed: ${JSON.stringify(judged)}`);
+  const result = submit({ worksitePath: worksite, reportId });
+  if (result.status !== "ok") throw new Error("expected ok");
+  return { repoKey, reportId, sha: judged.state.judgment?.sourceSha ?? "" };
+}
+
+function setOriginMain(ref: string): void {
+  execFileSync("git", ["-C", worksite, "update-ref", "refs/remotes/origin/main", ref]);
+  execFileSync("git", ["-C", worksite, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"]);
+}
+
+describe("取り込みの状態(導出)", () => {
+  it("受け入れた sha が origin のデフォルトブランチに入っていれば「入った」", () => {
+    const { repoKey, sha } = submittedReport();
+    setOriginMain(sha);
+    const detail = repoDetail(repoKey);
+    expect(detail?.reports[0].adoption).toEqual({ defaultBranch: "main", entered: true });
+  });
+
+  it("入っていなければ取り込み待ち(entered: false)", () => {
+    const { repoKey, sha } = submittedReport();
+    // origin/main を受け入れた sha を含まない別系譜のコミットに向ける
+    const orphan = execFileSync(
+      "git",
+      ["-C", worksite, "commit-tree", `${sha}^{tree}`, "-m", "unrelated"],
+      { encoding: "utf8" },
+    ).trim();
+    setOriginMain(orphan);
+    const detail = repoDetail(repoKey);
+    expect(detail?.reports[0].adoption).toEqual({ defaultBranch: "main", entered: false });
+  });
+
+  it("origin の参照が無ければ導出しない(確かめられないことを偽らない)", () => {
+    const { repoKey } = submittedReport();
+    const detail = repoDetail(repoKey);
+    expect(detail?.reports[0].adoption).toBeUndefined();
+  });
+});
+
+describe("submittedRecord(消費者向けの照会)", () => {
+  it("受け入れた sha に一致する提出済みの報告を返す", () => {
+    const { reportId, sha } = submittedReport();
+    expect(submittedRecord(worksite, sha)).toEqual({ submitted: true, reportId, title: "あいさつ表示" });
+  });
+
+  it("一致しない sha・git リポジトリでないパスは「無い」", () => {
+    const { sha } = submittedReport();
+    expect(submittedRecord(worksite, sha.replace(/./g, "0")).submitted).toBe(false);
+    expect(submittedRecord(tmpdir(), sha).submitted).toBe(false);
   });
 });
 

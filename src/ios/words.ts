@@ -184,7 +184,7 @@ export interface Judgment {
   verdict: "passed" | "failed" | "unconfirmed";
   behaviors: BehaviorVerdict[];
   reasons: string[]; // 報告レベルの理由(ビルド混在・同一ソース不明 等)
-  sourceSha: string | null; // submit が HEAD と照合する有効なソース(機械検証の到達点に差分確認の連鎖を適用した先)。dirty 検証は null
+  sourceSha: string | null; // 有効な検証済みソース(機械検証の到達点に差分確認の連鎖を適用した先)。提出の記録に転記される。dirty 検証は null
   verifiedSha?: string | null; // 機械が検証したソース(差分確認が無ければ sourceSha と同じ)。旧形式の記録には無い
   judgedAt: string;
 }
@@ -192,8 +192,8 @@ export interface Judgment {
 // 差分確認: 検証したソースの後に積まれたコミットの差分を人間が自分の目で見て、
 // 「判定は引き続き有効」と引き受ける記録。人間だけの操作(confirm / forget と同じ信頼層 —
 // エージェントの語彙(MCP)には入れない)。
-// 人間の強い権限は「照合を飛ばす」形にしない: submit の三点照合(sourceSha = HEAD = PR 先頭)は
-// そのままに、judge が差分確認の連鎖で sourceSha を先へ進める — 提出済み(検証されたソースの提出)の意味を守る。
+// 人間の強い権限は「照合を飛ばす」形にしない: judge が差分確認の連鎖で sourceSha を先へ進め、
+// 提出の記録が指す「検証されたソース」を最新に保つ — 提出済みの意味を守る。
 // 対象は fromSha が toSha の祖先である差分だけ(rebase・巻き戻しは取り直し)
 export const DELTA_CONFIRM_LABEL = "差分確認";
 
@@ -204,21 +204,33 @@ export interface DeltaConfirmation {
   confirmedAt: string;
 }
 
-// 外に出す行為の境界線(2026-07 の再定義。人間の設計判断 — 事故由来ではなく、
-// 「下書きPR 運用 + デフォルトブランチ保護を前提に、feature ブランチへの push のリスクは極小」という判断):
+// 外に出す行為の境界線(2026-07 再設計: 抽象=提出の記録 / 具体=消費者のガード、を分離する):
 // - 共有(share): feature ブランチへの push・下書きPR(draft PR)の作成。可逆なのでエージェントの自由領域
-// - 提出(submit): 検証された報告の下書きPR をレビュー可能にする(ドラフト解除)。ゲートだけの遷移
-// - 取り込み(merge): 不可逆の採用。人間だけの操作 — エージェントの語彙に入れない(掃除 forget と同格)
+// - 提出(submit): 検証と人間確認が終わった報告を「検証したソース(sourceSha)を受け入れた」と記録する
+//   状態遷移。**git や gh のコマンドは実行しない**(ゲートは世界を読むが変えない)。FSM の終着
+// - 取り込みに向かう操作(レビュー可能化 gh pr ready・デフォルトブランチへの push・merge):
+//   提出という状態に依存する消費者(PreToolUse hook・ブランチ保護・人間)がガードする。
+//   hook は「ブランチ先端の sha に一致する提出済みの報告があるか」をデーモンに照会し、
+//   一致すればエージェント自身の gh pr ready を通す。merge とデフォルトブランチ push は
+//   エージェントには常に遮断(人間は自由 — main 直運用では人間が提出の記録を確かめて push する)
 
-// 提出の記録: submit が報告に保存する(FSM の終着)
+// 取り込みの状態(導出。保存しない): 提出の記録の sha が origin のデフォルトブランチの祖先か
+export const ENTERED_DEFAULT_BRANCH_LABEL = "デフォルトブランチに入った";
+export const AWAITING_ADOPTION_LABEL = "取り込み待ち";
+
+// 提出の記録: submit が報告に保存する(FSM の終着)。
+// 記録だけであり、push・レビュー可能化はしない。remote / prNumber / prUrl / readiedAt / pushedAt は
+// 旧形式(提出が push やドラフト解除を実行していた頃)の記録にだけ残る
 export interface Submission {
-  sha: string;
-  branch: string;
-  remote: string;
-  prNumber?: number; // レビュー可能にした PR。旧形式(提出 = push)の記録には無い
+  sha: string; // 受け入れた検証済みソース(judgment.sourceSha の転記)
+  branch?: string; // 報告の作業ブランチ(記録があるもののみ)
+  recordedAt?: string; // 提出を記録した時刻(新形式)
+  via?: "dashboard"; // 入口(省略 = MCP / CLI)。監査と同じく経路を残す
+  remote?: string; // 旧形式のみ
+  prNumber?: number; // 旧形式(提出 = ドラフト解除)のみ
   prUrl?: string;
-  readiedAt?: string; // ドラフト解除の時刻
-  pushedAt?: string; // 旧形式(提出 = push)の記録のみ
+  readiedAt?: string; // 旧形式: ドラフト解除の時刻
+  pushedAt?: string; // 旧形式(提出 = push)のみ
 }
 
 // 完了報告: エージェントの「できました」の型。動作一覧はオープン時に固定(変えたいなら別の作業名で開く)

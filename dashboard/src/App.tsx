@@ -4,6 +4,7 @@ import {
   REPORT_GROUP_LABEL,
   RepoDetail,
   RepoSummary,
+  AWAITING_ADOPTION_LABEL,
   UNRESOLVED_REJECTION_LABEL,
   eventSentence,
   fetchJson,
@@ -330,7 +331,15 @@ function AttentionBand({
   const unresolved = detail.unresolvedRejections;
   const awaitingHuman = detail.reports.filter((r) => reportGroup(r.state) === "awaiting_human");
   const awaitingSubmit = detail.reports.filter((r) => reportGroup(r.state) === "awaiting_submit");
-  if (unresolved.length === 0 && awaitingHuman.length === 0 && awaitingSubmit.length === 0) return null;
+  // 取り込み待ち(導出): 提出済みだが、受け入れた sha がまだ origin のデフォルトブランチに入っていない
+  const awaitingAdoption = detail.reports.filter((r) => r.adoption !== undefined && !r.adoption.entered);
+  if (
+    unresolved.length === 0 &&
+    awaitingHuman.length === 0 &&
+    awaitingSubmit.length === 0 &&
+    awaitingAdoption.length === 0
+  )
+    return null;
 
   const latestRejectedReport = detail.reports.find((r) => r.reportId === unresolved[0]?.reportId);
 
@@ -382,7 +391,25 @@ function AttentionBand({
             <ReportLink
               key={report.reportId}
               label={report.title}
-              title={`報告「${report.title}」を開く(カードの提出ボタンから提出できる)`}
+              title={`報告「${report.title}」を開く(カードの提出ボタンから提出を記録できる)`}
+              onOpen={() => onOpenReport(report.reportId)}
+            />
+          ))}
+        </div>
+      )}
+      {awaitingAdoption.length > 0 && (
+        <div className="flex w-full flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-black/10 px-3.5 py-2.5 text-[13px] dark:border-white/10">
+          <span
+            className="font-semibold text-zinc-600 dark:text-zinc-300"
+            title="提出済みだが、受け入れた sha がまだ origin のデフォルトブランチに入っていない(人間の番: PR 運用なら merge、main 直運用なら push)"
+          >
+            ⏳ {AWAITING_ADOPTION_LABEL} {awaitingAdoption.length}件
+          </span>
+          {awaitingAdoption.map((report) => (
+            <ReportLink
+              key={report.reportId}
+              label={report.title}
+              title={`報告「${report.title}」を開く(取り込みは人間の操作)`}
               onOpen={() => onOpenReport(report.reportId)}
             />
           ))}

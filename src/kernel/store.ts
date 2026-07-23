@@ -12,17 +12,32 @@ export function gateHome(): string {
 // リポジトリの同定: git 共有ディレクトリの実パス。
 // 全 worktree から同じ値に解決され、worktree を削除しても状態が残る。
 export function repoDirOf(worksitePath: string): string {
-  const common = execFileSync("git", ["-C", worksitePath, "rev-parse", "--git-common-dir"], {
-    encoding: "utf8",
-  }).trim();
-  const commonAbs = realpathSync(resolve(worksitePath, common));
-  const repoKey = createHash("sha256").update(commonAbs).digest("hex").slice(0, 12);
+  const { repoKey, commonDir } = resolveRepoKey(worksitePath);
   const dir = join(gateHome(), "repos", repoKey);
   mkdirSync(join(dir, "builds"), { recursive: true });
   mkdirSync(join(dir, "evidence"), { recursive: true });
   mkdirSync(join(dir, "reports"), { recursive: true });
-  registerRepo(repoKey, commonAbs);
+  registerRepo(repoKey, commonDir);
   return dir;
+}
+
+// 副作用なしの同定(消費者向けの照会用)。台帳もディレクトリも作らない。
+// git リポジトリでないパスは null(照会は「無い」と答えるだけで、状態を増やさない)
+export function repoKeyOf(worksitePath: string): string | null {
+  try {
+    return resolveRepoKey(worksitePath).repoKey;
+  } catch {
+    return null;
+  }
+}
+
+function resolveRepoKey(worksitePath: string): { repoKey: string; commonDir: string } {
+  const common = execFileSync("git", ["-C", worksitePath, "rev-parse", "--git-common-dir"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+  const commonDir = realpathSync(resolve(worksitePath, common));
+  return { repoKey: createHash("sha256").update(commonDir).digest("hex").slice(0, 12), commonDir };
 }
 
 // ダッシュボード用の台帳: どのキーがどのリポジトリか

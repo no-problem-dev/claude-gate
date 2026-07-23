@@ -1,6 +1,6 @@
 {
   "name": "claude-gate",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "description": "AI 開発の品質ゲート: ビルドID と出所照合で「できました」に証拠を義務づける。ローカル常駐デーモン(claude-gate)への MCP 接続と使い方スキルを提供",
   "skills": "./skills/"
 }

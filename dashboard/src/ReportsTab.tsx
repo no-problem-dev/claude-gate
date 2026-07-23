@@ -1,7 +1,9 @@
 import { Card, Chip } from "@heroui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AWAITING_ADOPTION_LABEL,
   DELTA_CONFIRM_LABEL,
+  ENTERED_DEFAULT_BRANCH_LABEL,
   Evidence,
   REPORT_GROUP_LABEL,
   Report,
@@ -184,24 +186,48 @@ function ReportCard({
       </header>
 
       {report.submission !== undefined && (
-        <p className="mt-3 rounded-xl border border-green-600/30 bg-green-600/8 p-3 text-[13px]">
-          {report.submission.prNumber !== undefined ? (
-            <>
-              <a href={report.submission.prUrl} target="_blank" rel="noreferrer" className="underline">
-                PR #{report.submission.prNumber}
-              </a>
-              (先頭 <span className="font-mono">{report.submission.sha.slice(0, 7)}</span>)をレビュー可能にした(
-              {formatTime(report.submission.readiedAt ?? "")})。検証したソース = HEAD = PR
-              先頭であることをゲートが照合した上での提出。取り込みは人間の操作。
-            </>
-          ) : (
-            <>
-              {report.submission.remote}/{report.submission.branch} へ{" "}
-              <span className="font-mono">{report.submission.sha.slice(0, 7)}</span> を push 済み(
-              {formatTime(report.submission.pushedAt ?? "")})。旧形式(提出 = push)の記録。
-            </>
-          )}
-        </p>
+        <div className="mt-3 grid gap-1.5 rounded-xl border border-green-600/30 bg-green-600/8 p-3 text-[13px]">
+          <p>
+            {report.submission.prNumber !== undefined ? (
+              <>
+                <a href={report.submission.prUrl} target="_blank" rel="noreferrer" className="underline">
+                  PR #{report.submission.prNumber}
+                </a>
+                (先頭 <span className="font-mono">{report.submission.sha.slice(0, 7)}</span>)をレビュー可能にした(
+                {formatTime(report.submission.readiedAt ?? "")})。旧形式(提出がドラフト解除を実行していた頃)の記録。
+              </>
+            ) : report.submission.pushedAt !== undefined ? (
+              <>
+                {report.submission.remote}/{report.submission.branch} へ{" "}
+                <span className="font-mono">{report.submission.sha.slice(0, 7)}</span> を push 済み(
+                {formatTime(report.submission.pushedAt)})。旧形式(提出 = push)の記録。
+              </>
+            ) : (
+              <>
+                検証したソース <span className="font-mono">{report.submission.sha.slice(0, 7)}</span>{" "}
+                を受け入れたと記録した({formatTime(report.submission.recordedAt ?? "")}
+                {report.submission.via === "dashboard" && "・ダッシュボードから"})。
+                取り込みに向かう操作(レビュー可能化・merge・デフォルトブランチへの push)はこの記録と照合される。
+              </>
+            )}
+          </p>
+          {report.adoption !== undefined &&
+            (report.adoption.entered ? (
+              <p
+                className="text-[12.5px] text-zinc-600 dark:text-zinc-300"
+                title="受け入れた sha が origin のデフォルトブランチの祖先(このマシンが最後に取得した時点の姿)"
+              >
+                ✓ {ENTERED_DEFAULT_BRANCH_LABEL}(origin/{report.adoption.defaultBranch})
+              </p>
+            ) : (
+              <p
+                className="text-[12.5px] font-medium text-amber-800 dark:text-amber-200"
+                title="受け入れた sha がまだ origin のデフォルトブランチに入っていない"
+              >
+                ⏳ {AWAITING_ADOPTION_LABEL} — 人間の番です(PR 運用なら merge、main 直運用なら端末から push)
+              </p>
+            ))}
+        </div>
       )}
 
       {report.judgment !== undefined && report.judgment.reasons.length > 0 && (
@@ -441,8 +467,9 @@ function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail })
   );
 }
 
-// 提出待ち(合格)の解決導線: 人間がダッシュボードから提出できる。
-// 条件はエージェント経由と同一 — submit が 合格・クリーン・sourceSha = HEAD = PR 先頭 を照合する(入口が違うだけで門は同じ)
+// 提出待ち(合格)の解決導線: 人間がダッシュボードから提出を記録できる。
+// 提出は記録だけの状態遷移(検証したソースを受け入れた事実)で、世界への実行を含まない。
+// 条件はエージェント経由と同一(合格していること)— 入口が違うだけで門は同じ
 function SubmitAction({ report, detail }: { report: Report; detail: RepoDetail }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -474,7 +501,14 @@ function SubmitAction({ report, detail }: { report: Report; detail: RepoDetail }
     <div className="mt-3 grid gap-1.5 rounded-xl border border-green-600/30 bg-green-600/8 p-3 text-[13px]">
       <div className="flex flex-wrap items-center gap-2">
         <span className="min-w-0 flex-1">
-          合格済み。提出すると下書きPR がレビュー可能になる(検証したソース = HEAD = PR 先頭 をゲートが照合)
+          合格済み。提出すると「検証したソース
+          {report.judgment?.sourceSha !== undefined && report.judgment.sourceSha !== null && (
+            <>
+              {" "}
+              <span className="font-mono text-xs">{report.judgment.sourceSha.slice(0, 7)}</span>
+            </>
+          )}
+          を受け入れた」と記録され、報告は終着する(取り込みに向かう操作がこの記録と照合される)
         </span>
         <button
           className="cursor-pointer rounded-lg border border-green-700/50 bg-green-600/15 px-3 py-1.5 text-[13px] font-semibold text-green-800 transition-colors hover:bg-green-600/25 disabled:cursor-not-allowed disabled:opacity-50 dark:text-green-300"
@@ -490,17 +524,16 @@ function SubmitAction({ report, detail }: { report: Report; detail: RepoDetail }
       )}
       <ActionDialog
         open={dialogOpen}
-        title="提出しますか?"
+        title="提出を記録しますか?"
         description={
           <>
-            報告「{report.title}」を提出します。
+            報告「{report.title}」の提出を記録します(検証したソースを受け入れた事実。push などの実行は含みません)。
             <br />
-            ゲートが 検証したソース = HEAD = PR 先頭 の三点照合を行い、通れば下書きPR がレビュー可能になります。
-            <br />
-            提出済みの報告は終着で、もう変わりません(取り込みは人間のマージ操作)。
+            提出済みの報告は終着で、もう変わりません。取り込みに向かう操作(レビュー可能化・merge・デフォルトブランチへの
+            push)は、この記録と照合されるようになります。
           </>
         }
-        actionLabel="提出する"
+        actionLabel="記録する"
         busy={busy}
         onConfirm={() => void run()}
         onClose={() => setDialogOpen(false)}
@@ -607,7 +640,7 @@ function DriftNotice({ report, detail }: { report: Report; detail: RepoDetail })
                 <span className="font-mono text-xs">{drift.tip.slice(0, 7)}</span> まで({drift.commits.length}
                 コミット)人間の責任で引き受けます。
                 <br />
-                記録は報告に残り、自動で再判定されて提出できるようになります(submit の照合自体は変わりません)。
+                記録は報告に残り、自動で再判定されます(提出の記録が指す検証済みソースがブランチ先端まで進みます)。
               </>
             }
             actionLabel="引き受ける"
@@ -688,7 +721,7 @@ function DeltaConfirmSection({ report, detail }: { report: Report; detail: RepoD
       }}
     >
       <summary className="cursor-pointer text-xs text-zinc-500 dark:text-zinc-400">
-        検証後にコミットが動いて提出が止まったら({DELTA_CONFIRM_LABEL} — 人間の引き受け)
+        検証後にコミットが動いていたら({DELTA_CONFIRM_LABEL} — 人間の引き受けで検証済みソースを先端まで進める)
       </summary>
       <div className="mt-2 grid gap-2 rounded-xl border border-amber-500/40 bg-amber-500/8 p-3 text-[13px]">
         {preview === null && <p>ずれを調べています…</p>}
@@ -763,7 +796,7 @@ function DeltaConfirmSection({ report, detail }: { report: Report; detail: RepoD
               <span className="font-mono text-xs">{preview.toSha.slice(0, 7)}</span> まで({commitCount}
               コミット)人間の責任で引き受けます。
               <br />
-              記録は報告に残り、自動で再判定されて提出できるようになります(submit の照合自体は変わりません)。
+              記録は報告に残り、自動で再判定されます(提出の記録が指す検証済みソースが先まで進みます)。
             </>
           }
           actionLabel="引き受ける"

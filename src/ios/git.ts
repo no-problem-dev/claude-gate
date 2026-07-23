@@ -52,6 +52,23 @@ export function resolveSha(worksitePath: string, ref: string): string | null {
   }
 }
 
+// origin のデフォルトブランチ名。refs/remotes/origin/HEAD が正、未設定なら慣例名(main / master)を
+// ローカルに在る origin 参照から探す。どれも無ければ null(導出は「確かめられない」として出さない)
+export function originDefaultBranch(worksitePath: string): string | null {
+  try {
+    const ref = execFileSync("git", ["-C", worksitePath, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    return ref.replace(/^origin\//, "");
+  } catch {
+    for (const name of ["main", "master"]) {
+      if (resolveSha(worksitePath, `refs/remotes/origin/${name}`) !== null) return name;
+    }
+    return null;
+  }
+}
+
 export function isAncestor(worksitePath: string, ancestor: string, descendant: string): boolean {
   try {
     execFileSync("git", ["-C", worksitePath, "merge-base", "--is-ancestor", ancestor, descendant], {

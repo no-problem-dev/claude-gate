@@ -14,7 +14,7 @@ import { runCheck } from "../ios/tools/run_check.js";
 import { submit } from "../ios/tools/submit.js";
 import { CHANGE_KINDS, CHECK_KINDS } from "../ios/words.js";
 import { confirmBehavior, confirmDelta } from "../ios/confirm.js";
-import { deltaPreview, evidenceFilePath, overview, repoDetail, worksitePathOf } from "./api.js";
+import { deltaPreview, evidenceFilePath, overview, repoDetail, submittedRecord, worksitePathOf } from "./api.js";
 
 // ゲートはマシンに1プロセス(単一プロセスなので状態の書き込みは直列)。
 // セッションごとの状態は持たない: 全ツールが対象を明示引数で受ける。
@@ -150,7 +150,7 @@ function newServer(): McpServer {
     "submit",
     {
       description:
-        "提出する。合格した報告の、検証されたそのソース(sourceSha = HEAD = PR 先頭)の下書きPR をレビュー可能にする(git push origin HEAD + ドラフト解除)。共有(feature ブランチへの push・下書きPR の作成)は自由、取り込み(merge)は人間だけ。合格していない報告・検証後にコミットが動いた状態・PR が無い状態では提出できない。提出済みの報告は終着(証拠の追加も不可)",
+        "提出する。検証と人間確認が終わった合格報告を「検証したソース(sourceSha)を受け入れた」と記録する。記録だけの状態遷移で、git や gh のコマンドは実行しない。提出済みの記録があると、取り込みに向かう操作(gh pr ready 等)が hook のガードを通るようになる。共有(feature ブランチへの push・下書きPR の作成)は自由、merge とデフォルトブランチへの push は人間だけ。合格していない報告は提出できない。提出済みの報告は終着(証拠の追加も不可)",
       inputSchema: {
         worksitePath: z.string().describe("作業場(worktree)のパス"),
         reportId: z.string().describe("提出する報告(合格している必要がある)"),
@@ -187,6 +187,18 @@ app.post("/mcp", async (req, res) => {
 
 app.get("/api/overview", (_req, res) => {
   res.json(overview());
+});
+
+// 消費者向けの照会(読み取り専用): このリポジトリのこの sha に一致する提出済みの報告があるか。
+// PreToolUse hook がレビュー可能化(gh pr ready)の前にブランチ先端の sha で問い合わせる。
+// 台帳もディレクトリも作らない(照会は状態を増やさない)
+app.get("/api/submitted", (req, res) => {
+  const { path, sha } = req.query as Record<string, unknown>;
+  if (typeof path !== "string" || typeof sha !== "string" || !/^[0-9a-f]{40}$/.test(sha)) {
+    res.status(400).json({ submitted: false, error: "引数が足りない(path / sha=完全な40桁のコミットID)" });
+    return;
+  }
+  res.json(submittedRecord(path, sha));
 });
 
 // 人間確認の記録(人間の操作面はダッシュボードと CLI の2つ。同じ confirmBehavior に合流し、べき等)。
@@ -228,8 +240,8 @@ app.post("/api/confirm", (req, res) => {
   );
 });
 
-// 提出(人間がダッシュボードから)。条件はエージェント経由と同一 —
-// submit ツール自身が 合格・クリーン・sourceSha = HEAD = PR 先頭 の照合を行う(入口が違うだけで門は同じ)
+// 提出の記録(人間がダッシュボードから)。条件はエージェント経由と同一(合格していること) —
+// 提出は記録だけで世界への実行を含まない(入口が違うだけで門は同じ。監査に via: dashboard が残る)
 app.post("/api/submit", (req, res) => {
   const { repoKey, reportId } = (req.body ?? {}) as Record<string, unknown>;
   if (typeof repoKey !== "string" || !/^[0-9a-f]{12}$/.test(repoKey) || typeof reportId !== "string") {

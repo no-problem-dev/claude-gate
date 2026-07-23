@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -11,36 +11,23 @@ import { registerBuild } from "../src/ios/tools/register_build.js";
 import { runCheck } from "../src/ios/tools/run_check.js";
 import { submit } from "../src/ios/tools/submit.js";
 
-// 提出の一本化(A7 / K-5): 合格した報告の、検証されたそのソースの下書きPR だけがレビュー可能にできる。
-// gh は PATH に注入した偽物(pr.json を状態にする)で再現する — 実 GitHub 非依存
+// 提出は記録だけ(抽象と具体の分離): 検証したソースを受け入れたと記録する状態遷移で、
+// git push も gh も実行しない。取り込みに向かう操作のガードは消費者(hook)の領分 —
+// guard_official.test.ts が照会分岐を固定する。
+// ここでのゴールデンは「提出しても世界が変わらない」: bare リモートの参照が動かず、
+// PATH に置いた監視付きの偽 gh が一度も呼ばれない
 
 let worksite: string;
 let bare: string;
 let app: string;
 let screenshot: string;
-let prFile: string;
+let ghCalledMarker: string;
 
 const ORIGINAL_PATH = process.env.PATH ?? "";
 
-// 偽 gh: GH_FAKE_PR(pr.json)が無ければ「PR なし」。pr ready は isDraft を false にする
-const FAKE_GH = `#!/usr/bin/env node
-const { readFileSync, writeFileSync, existsSync } = require("node:fs");
-const args = process.argv.slice(2);
-const prFile = process.env.GH_FAKE_PR;
-if (args[0] === "--version") { console.log("gh fake"); process.exit(0); }
-if (args[0] === "pr" && args[1] === "view") {
-  if (!prFile || !existsSync(prFile)) { console.error("no pull requests found for branch"); process.exit(1); }
-  console.log(readFileSync(prFile, "utf8"));
-  process.exit(0);
-}
-if (args[0] === "pr" && args[1] === "ready") {
-  if (!prFile || !existsSync(prFile)) { console.error("no pull requests found"); process.exit(1); }
-  const pr = JSON.parse(readFileSync(prFile, "utf8"));
-  pr.isDraft = false;
-  writeFileSync(prFile, JSON.stringify(pr));
-  process.exit(0);
-}
-console.error("fake gh: unsupported: " + args.join(" "));
+// 監視付きの偽 gh: 呼ばれたら marker ファイルを書く(提出が gh を実行していない証明に使う)
+const WATCH_GH = `#!/usr/bin/env node
+require("node:fs").writeFileSync(process.env.GH_CALLED_MARKER, process.argv.slice(2).join(" "));
 process.exit(1);
 `;
 
@@ -53,23 +40,13 @@ function commitAll(message: string): void {
   execFileSync("git", ["-C", worksite, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", message]);
 }
 
-// 下書きPR の状態を偽 gh に置く(headSha 省略時は HEAD = 検証済みソースと一致)
-function putPr(overrides: Partial<Record<string, unknown>> = {}): void {
-  writeFileSync(
-    prFile,
-    JSON.stringify({
-      number: 12,
-      url: "https://github.com/example/repo/pull/12",
-      isDraft: true,
-      state: "OPEN",
-      headRefOid: git("rev-parse", "HEAD"),
-      ...overrides,
-    }),
-  );
-}
-
-function readPr(): { isDraft: boolean } {
-  return JSON.parse(readFileSync(prFile, "utf8")) as { isDraft: boolean };
+// 世界が変わっていないことの観測: bare リモートに参照が1つも無い(show-ref は参照ゼロのとき exit 1)
+function bareRefs(): string {
+  try {
+    return execFileSync("git", ["-C", bare, "show-ref"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  } catch {
+    return "";
+  }
 }
 
 beforeEach(() => {
@@ -89,10 +66,10 @@ beforeEach(() => {
   screenshot = join(artifacts, "screen.png");
   writeFileSync(screenshot, "png-bytes");
   const fakeBin = mkdtempSync(join(tmpdir(), "gate-fakebin-"));
-  writeFileSync(join(fakeBin, "gh"), FAKE_GH, { mode: 0o755 });
-  prFile = join(fakeBin, "pr.json");
+  writeFileSync(join(fakeBin, "gh"), WATCH_GH, { mode: 0o755 });
+  ghCalledMarker = join(fakeBin, "gh-called");
   process.env.PATH = `${fakeBin}:${ORIGINAL_PATH}`;
-  process.env.GH_FAKE_PR = prFile;
+  process.env.GH_CALLED_MARKER = ghCalledMarker;
 });
 
 // 合格まで通す(スクショ + ゲート実行のテスト)
@@ -137,65 +114,32 @@ describe("judge — sourceSha(検証したソース)", () => {
   });
 });
 
-describe("submit", () => {
-  it("合格した報告の検証済みソースが push され、下書きPR がレビュー可能になり、提出済みになる", () => {
+describe("submit — 記録だけの状態遷移", () => {
+  it("合格した報告の提出が記録される(受け入れた sha = 検証したソース)", () => {
     const reportId = passedReport();
-    putPr();
+    const verified = git("rev-parse", "HEAD");
     const result = submit({ worksitePath: worksite, reportId });
     if (result.status !== "ok") throw new Error(`expected ok: ${JSON.stringify(result)}`);
     expect(result.state.state).toBe("submitted");
-    expect(result.state.submission?.sha).toBe(git("rev-parse", "HEAD"));
-    expect(result.state.submission?.prNumber).toBe(12);
-    expect(result.state.submission?.readiedAt).toBeDefined();
-    const pushed = execFileSync("git", ["-C", bare, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-    expect(pushed).toBe(git("rev-parse", "HEAD")); // bare remote に実際に届いている
-    expect(readPr().isDraft).toBe(false); // ドラフトが解除されている
+    expect(result.state.submission?.sha).toBe(verified);
+    expect(result.state.submission?.branch).toBe(git("rev-parse", "--abbrev-ref", "HEAD"));
+    expect(result.state.submission?.recordedAt).toBeDefined();
+  });
+
+  it("ゴールデン: 提出しても世界が変わらない(push されず、gh も呼ばれない)", () => {
+    const reportId = passedReport();
+    const result = submit({ worksitePath: worksite, reportId });
+    expect(result.status).toBe("ok");
+    expect(bareRefs()).toBe(""); // bare リモートに参照が1つも無い = push は起きていない
+    expect(existsSync(ghCalledMarker)).toBe(false); // PATH の監視 gh は一度も呼ばれていない
   });
 
   it("再 submit はべき等(提出し直さず既提出を返す)", () => {
     const reportId = passedReport();
-    putPr();
     submit({ worksitePath: worksite, reportId });
     const again = submit({ worksitePath: worksite, reportId });
     if (again.status !== "ok") throw new Error("expected ok");
     expect(again.note).toContain("既提出");
-  });
-
-  it("このブランチの PR が無ければ提出できない(fix は下書きPR の作成)", () => {
-    const reportId = passedReport();
-    const result = submit({ worksitePath: worksite, reportId });
-    expect(result.status).toBe("rejected");
-    if (result.status !== "rejected") throw new Error("expected rejected");
-    expect(result.reason).toContain("PR が無い");
-    expect(result.fix).toContain("--draft");
-  });
-
-  it("PR の先頭が検証したソースと違えば提出できない", () => {
-    const reportId = passedReport();
-    putPr({ headRefOid: "0000000000000000000000000000000000000000" });
-    const result = submit({ worksitePath: worksite, reportId });
-    expect(result.status).toBe("rejected");
-    if (result.status !== "rejected") throw new Error("expected rejected");
-    expect(result.reason).toContain("PR");
-    expect(result.reason).toContain("検証したソース");
-  });
-
-  it("取り込み済み・閉じられた PR には提出できない", () => {
-    const reportId = passedReport();
-    putPr({ state: "MERGED" });
-    const result = submit({ worksitePath: worksite, reportId });
-    expect(result.status).toBe("rejected");
-    if (result.status !== "rejected") throw new Error("expected rejected");
-    expect(result.reason).toContain("取り込み済み");
-  });
-
-  it("既にレビュー可能な PR は照合だけ通して記録する(べき等)", () => {
-    const reportId = passedReport();
-    putPr({ isDraft: false });
-    const result = submit({ worksitePath: worksite, reportId });
-    if (result.status !== "ok") throw new Error(`expected ok: ${JSON.stringify(result)}`);
-    expect(result.state.state).toBe("submitted");
-    expect(result.note).toContain("既にレビュー可能");
   });
 
   it("合格していない報告は提出できない", () => {
@@ -211,62 +155,61 @@ describe("submit", () => {
     expect(result.reason).toContain("合格していない");
   });
 
-  it("検証後にコミットが動いたら提出できない(ブランチ先端 ≠ sourceSha)", () => {
-    const reportId = passedReport();
-    writeFileSync(join(worksite, "after.txt"), "検証後の変更");
-    commitAll("after verify");
-    const result = submit({ worksitePath: worksite, reportId });
-    expect(result.status).toBe("rejected");
-    if (result.status !== "rejected") throw new Error("expected rejected");
-    expect(result.reason).toContain("検証したソース");
-  });
-
-  // 人間の動きは非同期: 照合と push は報告の作業ブランチ基準で、ローカルの状態に依存しない
-  it("別ブランチで作業中でも、報告の作業ブランチ基準で提出できる", () => {
-    const reportId = passedReport();
-    const branch = git("rev-parse", "--abbrev-ref", "HEAD");
-    const verified = git("rev-parse", "HEAD");
-    putPr(); // PR 先頭 = 検証済みソース
-    git("checkout", "-q", "-b", "other-work");
-    writeFileSync(join(worksite, "other.txt"), "別の作業");
-    commitAll("別の作業のコミット");
-
-    const result = submit({ worksitePath: worksite, reportId });
-    expect(result.status).toBe("ok");
-    if (result.status !== "ok") throw new Error("expected ok");
-    expect(result.state.state).toBe("submitted");
-    expect(result.state.submission?.branch).toBe(branch);
-    expect(result.state.submission?.sha).toBe(verified);
-    const pushed = execFileSync("git", ["-C", bare, "rev-parse", branch], { encoding: "utf8" }).trim();
-    expect(pushed).toBe(verified);
-  });
-
-  it("未コミット変更があってもブランチ基準の提出は通る(ローカルの状態を見ない)", () => {
-    const reportId = passedReport();
-    putPr();
-    writeFileSync(join(worksite, "wip.txt"), "未コミットの別作業");
-    const result = submit({ worksitePath: worksite, reportId });
-    expect(result.status).toBe("ok");
-  });
-
-  it("旧形式(ブランチ記録なし)の報告は従来どおり作業場の HEAD 基準(dirty は拒否)", () => {
+  // dirty 検証は judge が「確認できず」にするので、現行の判定では 合格 + sourceSha 無し は生まれない。
+  // この拒否は旧形式の判定レコード(sourceSha を持たない)への防御 — レコードを旧形式に偽装して固定する
+  it("検証したソースが確定していない報告(旧形式の判定)は提出できない", () => {
     const reportId = passedReport();
     const reposDir = join(process.env.GATE_HOME!, "repos");
     const repoKey = readdirSync(reposDir)[0];
     const recordPath = join(reposDir, repoKey, "reports", `${reportId}.json`);
-    const record = JSON.parse(readFileSync(recordPath, "utf8")) as { branch?: string };
-    delete record.branch;
+    const record = JSON.parse(readFileSync(recordPath, "utf8")) as { judgment?: { sourceSha: string | null } };
+    if (record.judgment !== undefined) record.judgment.sourceSha = null;
     writeFileSync(recordPath, JSON.stringify(record));
-    writeFileSync(join(worksite, "wip.txt"), "未コミット");
     const result = submit({ worksitePath: worksite, reportId });
     expect(result.status).toBe("rejected");
     if (result.status !== "rejected") throw new Error("expected rejected");
-    expect(result.reason).toContain("未コミット");
+    expect(result.reason).toContain("検証したソースが確定していない");
+  });
+
+  // ずれ(検証後に積まれたコミット)は提出を止めない: 提出の記録は「検証したソース X を受け入れた」で
+  // あり、X は変わらない。世界との一致のガードは取り込みに向かう操作の瞬間に消費者(hook)が行う
+  it("検証後にコミットが積まれても、提出は検証したソースの sha で記録される", () => {
+    const reportId = passedReport();
+    const verified = git("rev-parse", "HEAD");
+    writeFileSync(join(worksite, "after.txt"), "検証後の変更");
+    commitAll("after verify");
+    const result = submit({ worksitePath: worksite, reportId });
+    if (result.status !== "ok") throw new Error(`expected ok: ${JSON.stringify(result)}`);
+    expect(result.state.submission?.sha).toBe(verified); // 先端ではなく検証したソース
+  });
+
+  it("差分確認の後の提出は、引き受け先(ブランチ先端)の sha で記録される", () => {
+    const reportId = passedReport();
+    writeFileSync(join(worksite, "after.txt"), "x");
+    commitAll("検証後のコミット");
+    const tip = git("rev-parse", "HEAD");
+    const confirmed = confirmDelta({ worksitePath: worksite, report: reportId, note: "積まれた差分を見た" });
+    expect(confirmed.status).toBe("ok");
+    const result = submit({ worksitePath: worksite, reportId });
+    if (result.status !== "ok") throw new Error("expected ok");
+    expect(result.state.submission?.sha).toBe(tip);
+  });
+
+  // 人間の動きは非同期: 提出は記録なのでローカルの状態(チェックアウト・未コミット変更)に依存しない
+  it("別ブランチで作業中でも、未コミット変更があっても提出できる", () => {
+    const reportId = passedReport();
+    const branch = git("rev-parse", "--abbrev-ref", "HEAD");
+    const verified = git("rev-parse", "HEAD");
+    git("checkout", "-q", "-b", "other-work");
+    writeFileSync(join(worksite, "other.txt"), "別の作業(未コミット)");
+    const result = submit({ worksitePath: worksite, reportId });
+    if (result.status !== "ok") throw new Error("expected ok");
+    expect(result.state.submission?.branch).toBe(branch);
+    expect(result.state.submission?.sha).toBe(verified);
   });
 
   it("提出済みの報告には証拠を足せない(終着)", () => {
     const reportId = passedReport();
-    putPr();
     submit({ worksitePath: worksite, reportId });
     const result = runCheck({ worksitePath: worksite, check: "unit_test", reportId, behaviorIndex: 2 });
     expect(result.status).toBe("rejected");
@@ -274,36 +217,19 @@ describe("submit", () => {
     expect(result.reason).toContain("提出済み");
   });
 
-  it("remote が無ければ提出できない", () => {
+  it("監査のできごとに 受け入れた sha と入口(via)が残る", () => {
     const reportId = passedReport();
-    git("remote", "remove", "origin");
-    const result = submit({ worksitePath: worksite, reportId });
-    expect(result.status).toBe("rejected");
-    if (result.status !== "rejected") throw new Error("expected rejected");
-    expect(result.fix).toContain("remote");
-  });
-});
-
-describe("submit — 差分確認(人間の引き受け)との連携", () => {
-  it("検証後に積まれたコミットは提出できないが、差分確認の後は三点照合がそのまま通る", () => {
-    const reportId = passedReport();
-    writeFileSync(join(worksite, "after.txt"), "x");
-    commitAll("検証後のコミット");
-    putPr(); // PR 先頭 = 新しい HEAD
-
-    const blocked = submit({ worksitePath: worksite, reportId });
-    expect(blocked.status).toBe("rejected");
-    if (blocked.status !== "rejected") throw new Error("expected rejected");
-    expect(blocked.reason).toContain("検証したソース");
-
-    const confirmed = confirmDelta({ worksitePath: worksite, report: reportId, note: "積まれた差分を見た" });
-    expect(confirmed.status).toBe("ok");
-
-    const result = submit({ worksitePath: worksite, reportId });
-    expect(result.status).toBe("ok");
-    if (result.status !== "ok") throw new Error("expected ok");
-    expect(result.state.state).toBe("submitted");
-    expect(result.state.submission?.sha).toBe(git("rev-parse", "HEAD"));
-    expect(readPr().isDraft).toBe(false);
+    const verified = git("rev-parse", "HEAD");
+    submit({ worksitePath: worksite, reportId, via: "dashboard" });
+    const reposDir = join(process.env.GATE_HOME!, "repos");
+    const repoKey = execFileSync("ls", [reposDir], { encoding: "utf8" }).trim();
+    const events = readFileSync(join(reposDir, repoKey, "events.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    const submitted = events.find((e) => e.tool === "submit" && e.result === "ok");
+    expect(submitted?.sha).toBe(verified);
+    expect(submitted?.via).toBe("dashboard");
+    expect(submitted?.reportState).toBe("submitted");
   });
 });

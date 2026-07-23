@@ -73,7 +73,7 @@ export function GuideView() {
           </RoleLane>
           <LaneArrow label="記録" />
           <RoleLane name="人間" verb="観て決める">
-            ダッシュボードで確認。「確認できず」と「ずれ」を引き取る — 非同期でよい(あとからで完結する)
+            ダッシュボードで確認。「確認できず」「ずれ」「取り込み」を引き取る — 非同期でよい(あとからで完結する)
           </RoleLane>
         </div>
       </section>
@@ -120,16 +120,18 @@ export function GuideView() {
             証拠が複数ビルドやソースにまたがる報告は合格にならない(確認できず)。
           </Step>
           <Step n={8} name="提出" en="submit">
-            共有(feature ブランチへの push・下書きPR の作成)は自由。合格した報告の、
-            <strong>検証されたそのソース(判定時の sha = 作業ブランチ先端 = PR の先頭)</strong>だけが
-            下書きPR をレビュー可能にできる。検証後にコミットが積まれていたら拒否 —
-            「別物を見て OK」の提出版を締める。照合も push もブランチ基準で、
-            ローカルのチェックアウトや未コミット変更には依存しない。
-            取り込み(マージ)は人間だけの操作。提出済みの報告は終着(証拠の追加も不可)。
+            検証と人間確認が終わった合格報告を、<strong>「検証したソースを受け入れた」と記録する</strong>。
+            提出は記録だけの状態遷移で、push も gh も実行しない(ゲートは世界を読むが変えない)。
+            取り込みに向かう操作 — レビュー可能化(gh pr ready)・merge・デフォルトブランチへの push —
+            は、この記録に依存するガード(hook・ブランチ保護・人間)が守る:
+            レビュー可能化はブランチ先端がこの記録と一致するときだけ通り、
+            merge とデフォルトブランチへの push は人間だけの操作。
+            提出済みの報告は終着(証拠の追加も不可)。
           </Step>
         </ol>
         <div className="mt-3 flex flex-wrap gap-2">
           <Chip size="sm" color="default">実行は自由、採用は厳格</Chip>
+          <Chip size="sm" color="default">ゲートは世界を読むが、変えない</Chip>
           <Chip size="sm" color="default">すべての操作はべき等(何度呼んでも安全)</Chip>
           <Chip size="sm" color="default">記録は不変(拒否も含めて全部残る)</Chip>
         </div>
@@ -157,9 +159,11 @@ export function GuideView() {
               機械に見えない判断を記録として供給する形で行使する。
             </li>
             <li>
-              <strong className="text-foreground">提出して、取り込む</strong> —
-              合格した報告はカードのボタンで提出できる(条件の照合はエージェント経由と同一 —
-              入口が違うだけで門は同じ)。マージだけは GitHub 上の人間の操作。
+              <strong className="text-foreground">取り込む</strong> —
+              提出(記録)は誰からでもできる(カードのボタン・CLI・エージェント)。
+              提出済みなのにまだデフォルトブランチに入っていない報告は<strong>取り込み待ち</strong>として
+              カードと注意帯に出る — PR 運用なら GitHub 上で merge、main 直運用なら端末から push。
+              どちらも人間だけの操作。
             </li>
           </ol>
         </Card>
@@ -221,10 +225,13 @@ export function GuideView() {
               <Word ja="共有" en="share">feature ブランチへの push・下書きPR の作成。可逆なのでエージェントの自由領域(前提: デフォルトブランチは GitHub 側のブランチ保護で守る)</Word>
               <Word ja="下書きPR" en="draft PR">共有の置き場。レビュー依頼は飛ばず、閉じれば戻る</Word>
               <Word ja="作業ブランチ" en="branch">報告の帰属先(オープン時に記録)。人間の動きは非同期 — 差分確認・提出はローカルのチェックアウトでなくブランチを基準に動く</Word>
-              <Word ja="提出" en="submit">合格した報告の下書きPR をレビュー可能にする(ドラフト解除)。検証したソース = 作業ブランチ先端 = PR 先頭 の三点照合。ゲートだけの遷移</Word>
-              <Word ja="ずれ" en="drift">検証したソースの後に作業ブランチへ積まれたコミット。状態ではなく導出 — 発生した瞬間から報告カードに出す(提出の門で初めて発覚させない)</Word>
-              <Word ja="差分確認" en="confirm_delta">ずれの差分を人間が見て「判定は引き続き有効」と引き受ける記録。人間だけの操作 — 判定が sourceSha を先へ進め、提出の照合は変えない</Word>
-              <Word ja="取り込み" en="merge">不可逆の採用。人間だけの操作 — エージェントの語彙に入れない</Word>
+              <Word ja="提出" en="submit">検証と人間確認が終わった報告を「検証したソースを受け入れた」と記録する状態遷移。git や gh のコマンドは実行しない。FSM の終着</Word>
+              <Word ja="レビュー可能化" en="gh pr ready">取り込みに向かう操作。ブランチ先端が提出の記録と一致するときだけガード(hook)が通す — エージェント自身が実行する</Word>
+              <Word ja="ずれ" en="drift">検証したソースの後に作業ブランチへ積まれたコミット。状態ではなく導出 — 発生した瞬間から報告カードに出す</Word>
+              <Word ja="差分確認" en="confirm_delta">ずれの差分を人間が見て「判定は引き続き有効」と引き受ける記録。人間だけの操作 — 判定が sourceSha を先へ進め、提出の記録が指す検証済みソースを最新に保つ</Word>
+              <Word ja="取り込み" en="merge">不可逆の採用(merge・デフォルトブランチへの push)。人間だけの操作 — エージェントの語彙に入れない</Word>
+              <Word ja="取り込み待ち" en="awaiting adoption">提出済みだが、受け入れた sha がまだ origin のデフォルトブランチに入っていない状態。導出(保存しない)— 人間の番</Word>
+              <Word ja="デフォルトブランチに入った" en="entered default branch">受け入れた sha が origin のデフォルトブランチの祖先。導出 — このマシンが最後に取得した時点の姿</Word>
             </tbody>
           </table>
         </Card>
@@ -261,15 +268,17 @@ export function GuideView() {
             決定論の判定(judge)・ゲートによる確かめの実行(run_check)・リポジトリ内の宣言 gate.yaml・
             見えないこと台帳。見えない動作への OK は「確認できず」に変換され、人間に渡る
           </StatusRow>
-          <StatusRow chip={<Chip size="sm" color="success">稼働中</Chip>} name="提出の一本化(スライス3)+ 掃除(2c)">
-            共有(push・下書きPR)は自由、合格した報告の検証済みソースだけがレビュー依頼できる(submit =
-            ドラフト解除)、取り込みは人間だけ。記録の掃除は人間の CLI(claude-gate forget)—
-            エージェントは記録を消せない
+          <StatusRow chip={<Chip size="sm" color="success">稼働中</Chip>} name="提出(記録)とガード(スライス3)+ 掃除(2c)">
+            提出は「検証したソースを受け入れた」の記録だけ(世界への実行を含まない)。
+            取り込みに向かう操作は提出の記録に依存するガードが守る: レビュー可能化はブランチ先端が
+            記録と一致するときだけ hook が通し、merge とデフォルトブランチへの push は人間だけ。
+            記録の掃除は人間の CLI(claude-gate forget)— エージェントは記録を消せない
           </StatusRow>
           <StatusRow chip={<Chip size="sm" color="success">稼働中</Chip>} name="人間の非同期な操作面(スライス4)">
             人間確認・差分確認・提出がダッシュボードと CLI から、あとからでも完結する。
-            報告は作業ブランチに属し、照合と push はローカルの状態に依存しない。
-            ずれ(検証後に積まれたコミット)は導出で常時カードに表示 — 提出の門で初めて発覚しない
+            報告は作業ブランチに属し、記録はローカルの状態に依存しない。
+            ずれ(検証後に積まれたコミット)と取り込み待ち(提出済みなのに未取り込み)は
+            導出で常時カードに表示される
           </StatusRow>
         </div>
         <h3 className="mt-6 mb-2 text-[13px] font-semibold">
@@ -284,6 +293,8 @@ export function GuideView() {
             人間確認も証拠なので、この同じ経路で自動的に再判定される(特別な遷移は無い)。
             <strong>ずれは状態ではなく導出</strong>(検証したソースの後にブランチへ積まれたコミット。
             合格のまま起きて、差分確認か取り直しで合格のまま解消される)。
+            <strong>提出済みの先も導出</strong>(受け入れた sha がデフォルトブランチに入ったかは
+            世界のいまの姿なので、保存せず毎回確かめる)。
             「確認できず」は失敗ではなく、人間に渡すための正式な出口。
           </p>
         </Card>

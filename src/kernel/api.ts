@@ -1,10 +1,10 @@
 import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { branchTip, commitsBetween, gitBranch, gitSha, isAncestor } from "../ios/git.js";
+import { branchTip, commitsBetween, gitBranch, gitSha, isAncestor, originDefaultBranch, resolveSha } from "../ios/git.js";
 import { checkRunHeadline } from "../ios/log_summary.js";
 import { reportGroup } from "../ios/words.js";
 import { unresolvedRejections } from "./attention.js";
-import { gateHome, readJson } from "./store.js";
+import { gateHome, readJson, repoKeyOf } from "./store.js";
 import type { Build, Evidence, Report } from "../ios/words.js";
 
 // 読み取りモデルの証拠は派生フィールドを足す:
@@ -26,7 +26,15 @@ export interface SourceDrift {
   commits: { sha: string; subject: string }[];
 }
 
-export type ReportView = Report & { drift?: SourceDrift };
+// 取り込みの状態(導出): 提出済みの報告について、受け入れた sha が origin のデフォルトブランチに
+// 入ったか。保存しない — 世界のいまの姿は毎回世界に聞く。
+// 正直な限界: origin の参照はこのマシンが最後に取得した時点の姿
+export interface AdoptionStatus {
+  defaultBranch: string;
+  entered: boolean; // true = デフォルトブランチに入った / false = 取り込み待ち(人間の番)
+}
+
+export type ReportView = Report & { drift?: SourceDrift; adoption?: AdoptionStatus };
 
 // ダッシュボードの読み取りモデル。ゲートの状態(~/.claude-gate)を人間向けに集約する。
 // 書き込みは一切しない: 状態を変えられるのは MCP ツールだけ。
@@ -170,6 +178,31 @@ function deriveDrift(worksite: string | null, report: Report): SourceDrift | und
   };
 }
 
+// 取り込みの導出: 提出済みの報告の受け入れ sha が origin のデフォルトブランチの祖先か
+function deriveAdoption(worksite: string | null, report: Report): AdoptionStatus | undefined {
+  if (worksite === null || report.state !== "submitted") return undefined;
+  const sha = report.submission?.sha;
+  if (sha === undefined) return undefined;
+  const defaultBranch = originDefaultBranch(worksite);
+  if (defaultBranch === null) return undefined;
+  const tip = resolveSha(worksite, `refs/remotes/origin/${defaultBranch}`);
+  if (tip === null) return undefined;
+  return { defaultBranch, entered: sha === tip || isAncestor(worksite, sha, tip) };
+}
+
+// 提出済みの照会(消費者向け): このリポジトリのこの sha に一致する提出済みの報告。
+// hook がレビュー可能化の前に呼ぶ。副作用なし(未知のリポジトリは「無い」と答えるだけ)
+export function submittedRecord(
+  path: string,
+  sha: string,
+): { submitted: boolean; reportId?: string; title?: string } {
+  const repoKey = repoKeyOf(path);
+  if (repoKey === null) return { submitted: false };
+  const reports = readRecords<Report>(join(gateHome(), "repos", repoKey, "reports"));
+  const hit = reports.find((r) => r.state === "submitted" && r.submission?.sha === sha);
+  return hit === undefined ? { submitted: false } : { submitted: true, reportId: hit.reportId, title: hit.title };
+}
+
 export function repoDetail(repoKey: string): RepoDetail | null {
   const entry = readRegistry()[repoKey];
   if (!entry) return null;
@@ -177,7 +210,12 @@ export function repoDetail(repoKey: string): RepoDetail | null {
   const repoDir = join(gateHome(), "repos", repoKey);
   const reports: ReportView[] = readRecords<Report>(join(repoDir, "reports")).map((report) => {
     const drift = deriveDrift(worksite, report);
-    return drift !== undefined ? { ...report, drift } : report;
+    const adoption = deriveAdoption(worksite, report);
+    return {
+      ...report,
+      ...(drift !== undefined && { drift }),
+      ...(adoption !== undefined && { adoption }),
+    };
   });
   const builds = readRecords<Build>(join(repoDir, "builds"));
   const usedBy = new Map<string, { reportId: string; reportTitle: string; behaviorIndex: number }[]>();

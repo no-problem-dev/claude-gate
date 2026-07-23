@@ -66,8 +66,12 @@ describe("eventSentence — 原因が結果を運ぶ", () => {
     expect(
       eventSentence({ ts: at(0), tool: "judge", result: "ok", reportId: "r1", verdict: "passed", reportState: "passed" }),
     ).toBe("判定した — 合格");
+    // 新形式の提出(記録だけ)は branch を運ばない。branch がある行は旧形式(提出 = push)の記録
+    expect(
+      eventSentence({ ts: at(0), tool: "submit", result: "ok", reportId: "r1", sha: "a".repeat(40), reportState: "submitted" }),
+    ).toBe("提出を記録した — 検証したソースを受け入れ");
     expect(
       eventSentence({ ts: at(0), tool: "submit", result: "ok", reportId: "r1", branch: "main", reportState: "submitted" }),
-    ).toBe("提出した — main を push");
+    ).toBe("提出した — main を push(旧形式)");
   });
 });

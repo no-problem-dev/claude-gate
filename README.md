@@ -18,7 +18,7 @@ AI との iOS 開発で、エージェントの「できました」に証拠を
 |---|---|---|
 | デーモン | `src/` → `dist/` | HTTP MCP サーバ(127.0.0.1:7350・マシンに1プロセス)+ CLI(`claude-gate`) |
 | ダッシュボード | `dashboard/` | 人間向けの状態表示 + ガイド。デーモンが `/` で配信(読み取り専用) |
-| Claude Code プラグイン | `.claude-plugin/` + `.mcp.json` + `skills/` + `hooks/` | MCP 接続定義 + gate-loop スキル + 公式化ガード hook(ドラフト解除・マージ・デフォルトブランチ直 push の遮断) |
+| Claude Code プラグイン | `.claude-plugin/` + `.mcp.json` + `skills/` + `hooks/` | MCP 接続定義 + gate-loop スキル + 取り込みガード hook(レビュー可能化は提出の記録との照合で通す/遮断・マージとデフォルトブランチ直 push は遮断) |
 
 ## セットアップ(初回だけ)
 

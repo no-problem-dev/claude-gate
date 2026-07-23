@@ -138,13 +138,14 @@ export function VerifyDiagram() {
 }
 
 // ⑤ いま: 完了報告の一生(ドメインモデル §3.2 の写し)。
-// 正確さの要点3つ: (1) 判定済みに証拠が増えると判定は無効になり「証拠あり」に戻る —
+// 正確さの要点4つ: (1) 判定済みに証拠が増えると判定は無効になり「証拠あり」に戻る —
 // 人間確認も証拠なので、この同じ経路で自動再判定される(特別な遷移ではない)。
 // (2) ずれは状態ではなく導出 — 合格の隣に注記として描く(状態遷移の箱にしない)。
-// (3) 差分確認は状態を変えない(合格のまま、判定の sourceSha が先へ進む)
+// (3) 差分確認は状態を変えない(合格のまま、判定の sourceSha が先へ進む)。
+// (4) 提出は記録だけの遷移(世界への実行を含まない)。提出済みの先(取り込み)も状態ではなく導出
 export function ReportStateDiagram() {
   return (
-    <svg viewBox="0 0 760 312" className="h-auto w-full text-zinc-800 dark:text-zinc-100" role="img" aria-label="完了報告の状態遷移図: 下書きから証拠ありへ、判定で合格・不合格・確認できずに分かれ、合格だけが提出済みに進む。不合格は証拠を集め直して、確認できずは人間確認を記録して、どちらも証拠ありに戻って再判定される。ずれは状態ではなく導出で、差分確認か取り直しで解消する">
+    <svg viewBox="0 0 760 312" className="h-auto w-full text-zinc-800 dark:text-zinc-100" role="img" aria-label="完了報告の状態遷移図: 下書きから証拠ありへ、判定で合格・不合格・確認できずに分かれ、合格だけが提出済みに進む。提出は記録だけの遷移。不合格は証拠を集め直して、確認できずは人間確認を記録して、どちらも証拠ありに戻って再判定される。ずれは状態ではなく導出で、差分確認か取り直しで解消する。提出済みの先の取り込みも導出で、デフォルトブランチに入るまで取り込み待ちと表示される">
       <Arrow id="st" />
       <Box x={8} y={136} w={84} label={REPORT_STATE_LABEL.draft} />
       <line x1={92} y1={156} x2={164} y2={156} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
@@ -158,15 +159,21 @@ export function ReportStateDiagram() {
 
       <Box x={392} y={26} w={96} label={REPORT_STATE_LABEL.passed} tone="good" />
       <line x1={488} y1={46} x2={612} y2={46} strokeWidth="1.3" className={line} markerEnd="url(#st)" />
-      <text x={550} y={36} textAnchor="middle" fontSize="10" className={inkSub}>提出(三点照合)</text>
+      <text x={550} y={36} textAnchor="middle" fontSize="10" className={inkSub}>提出(記録)</text>
       <Box x={616} y={22} w={136} h={48} label={REPORT_STATE_LABEL.submitted} sub="終着 — もう変わらない" />
 
       {/* ずれ: 状態ではなく導出。合格のまま起きて、合格のまま解消される */}
-      <line x1={465} y1={66} x2={580} y2={106} strokeWidth="1.1" strokeDasharray="2.5 3" className={line} markerEnd="url(#st)" />
-      <text x={512} y={102} fontSize="9.5" className={inkSub}>検証後にコミット</text>
-      <rect x={548} y={108} width={204} height={52} rx="10" strokeWidth="1" strokeDasharray="4 3" className={boxWarn} />
-      <text x={650} y={126} textAnchor="middle" fontSize="12" fontWeight="600" className={inkWarn}>ずれ(状態ではなく導出)</text>
-      <text x={650} y={144} textAnchor="middle" fontSize="9.5" className={inkSub}>差分確認(人間の引き受け)か取り直しで解消</text>
+      <line x1={465} y1={66} x2={560} y2={102} strokeWidth="1.1" strokeDasharray="2.5 3" className={line} markerEnd="url(#st)" />
+      <text x={478} y={98} fontSize="9.5" className={inkSub}>検証後にコミット</text>
+      <rect x={548} y={104} width={204} height={48} rx="10" strokeWidth="1" strokeDasharray="4 3" className={boxWarn} />
+      <text x={650} y={121} textAnchor="middle" fontSize="12" fontWeight="600" className={inkWarn}>ずれ(状態ではなく導出)</text>
+      <text x={650} y={138} textAnchor="middle" fontSize="9.5" className={inkSub}>差分確認(人間の引き受け)か取り直しで解消</text>
+
+      {/* 取り込み: 提出済みの先も状態ではなく導出。世界(origin のデフォルトブランチ)を毎回確かめる */}
+      <line x1={684} y1={70} x2={666} y2={166} strokeWidth="1.1" strokeDasharray="2.5 3" className={line} markerEnd="url(#st)" />
+      <rect x={548} y={168} width={204} height={48} rx="10" strokeWidth="1" strokeDasharray="4 3" className={box} />
+      <text x={650} y={185} textAnchor="middle" fontSize="12" fontWeight="600" className={ink}>取り込み(導出)</text>
+      <text x={650} y={202} textAnchor="middle" fontSize="9.5" className={inkSub}>入るまで取り込み待ち — merge / push は人間だけ</text>
 
       <Box x={392} y={136} w={96} label={REPORT_STATE_LABEL.failed} tone="bad" />
       <path d="M 440 176 L 440 208 L 233 208 L 233 180" fill="none" strokeWidth="1.3" strokeDasharray="4 3" className={line} markerEnd="url(#st)" />

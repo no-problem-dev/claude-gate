@@ -118,8 +118,9 @@ export function confirmBehavior(args: ConfirmArgs): Reply<Report> {
 
 // 差分確認(confirm-delta): 検証したソースの後に積まれたコミットの差分を人間が見た上で、
 // 「判定は引き続き有効」と引き受ける(人間だけの操作。信頼層は confirm / forget と同じ)。
-// submit の三点照合は変えない — 記録後の自動再判定が差分確認の連鎖で sourceSha を先へ進め、照合はそのまま通る。
-// 提出できない合格報告が積み上がる問題(2026-07-22 に実際に起きた)の、人間による正式な解消経路
+// 記録後の自動再判定が差分確認の連鎖で sourceSha を先へ進め、提出の記録が指す検証済みソースを最新に保つ。
+// 取り込みに向かう操作(hook のガード)はブランチ先端と提出の記録の一致を見るので、
+// 先端を提出したいときの人間の正式な解消経路(推奨は取り直し)
 
 export interface ConfirmDeltaArgs {
   worksitePath: string;

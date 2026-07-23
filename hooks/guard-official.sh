@@ -1,12 +1,16 @@
 #!/bin/bash
-# ゲート運用リポジトリ(gate.yaml あり)で、作業を「公式化」する操作だけを遮断する。
+# ゲート運用リポジトリ(gate.yaml あり)で、取り込みに向かう操作をガードする消費者。
 # 境界線(src/ios/words.ts): 共有(feature ブランチへの push・下書きPR の作成)は自由 /
-# 提出(ドラフト解除)はゲートの submit だけ / 取り込み(merge)は人間だけ。
+# 提出は記録(ゲートの submit。世界への実行を含まない)/ 取り込みに向かう操作は提出の記録に依存する:
+# - レビュー可能化(gh pr ready)は、対象ブランチ先端の sha に一致する提出済みの報告があるかを
+#   デーモンに照会し、一致すれば通す(エージェント自身が実行する)。照会できないときは遮断側に倒す
+#   (公式化は止めても壊れない操作。「判定できないときは通す」は無関係な作業を壊さないための原則で、
+#   公式化そのものには当てはめない)
+# - merge・デフォルトブランチへの直接 push・非ドラフト PR 作成は常に遮断(人間だけ)
 # - この hook は入口の誘導であって壁ではない(パターン照合は破れる)。破れない壁は
-#   GitHub 側のデフォルトブランチ保護に置く(docs/architecture.md)
+#   GitHub 側のデフォルトブランチ保護と人間の merge に置く(docs/architecture.md)
 # - スコープ: gate.yaml をルートに置いたリポジトリだけ(宣言と強制が一致。他リポは素通し)
 # - 縛るのはエージェントのツール実行だけ。人間がターミナルから操作する自由はそのまま
-# - 判定できないときは通す(このスクリプトの失敗で無関係な作業を壊さない)
 set -u
 
 INPUT=$(cat)
@@ -50,21 +54,42 @@ has() { printf '%s' "$COMMAND" | grep -qE "$1"; }
 
 # --- 取り込み(merge)は人間だけ(エージェントの語彙に無い操作) ---
 if has '(^|[;&|[:space:]])gh[[:space:]]+pr[[:space:]]+merge([[:space:]]|$)'; then
-  deny "このリポジトリ($ROOT)はゲート運用。取り込み(merge)は人間だけの操作 — エージェントは PR をマージできない。合格した報告を submit でレビュー可能にし、取り込みは人間に依頼する。"
+  deny "このリポジトリ($ROOT)はゲート運用。取り込み(merge)は人間だけの操作 — エージェントは PR をマージできない。submit で提出を記録し、取り込みは人間に依頼する。"
 fi
 if has '(^|[;&|[:space:]])gh[[:space:]]+api[[:space:]]' && has '(pulls/[^[:space:]]*/merge|mergePullRequest|enablePullRequestAutoMerge)'; then
-  deny "このリポジトリ($ROOT)はゲート運用。API 経由の取り込み(merge)も人間だけの操作 — 合格した報告を submit でレビュー可能にし、取り込みは人間に依頼する。"
+  deny "このリポジトリ($ROOT)はゲート運用。API 経由の取り込み(merge)も人間だけの操作 — submit で提出を記録し、取り込みは人間に依頼する。"
 fi
 
-# --- 提出(ドラフト解除)はゲートの submit だけ ---
-if has '(^|[;&|[:space:]])gh[[:space:]]+pr[[:space:]]+ready([[:space:]]|$)' || has 'markPullRequestReadyForReview'; then
-  deny "このリポジトリ($ROOT)はゲート運用。ドラフト解除(提出)は gate の submit で行う — 合格した報告の、検証したソース = HEAD = PR 先頭の照合を通ったものだけがレビュー可能になる。報告が未判定なら judge、未合格なら証拠を集め直す。人間がターミナルから操作する自由はそのまま。"
+# --- レビュー可能化(gh pr ready)は提出の記録との照合で通す/遮断する(消費者のガード) ---
+if has 'markPullRequestReadyForReview'; then
+  deny "このリポジトリ($ROOT)はゲート運用。API 経由のレビュー可能化は対象ブランチを判定できない — gh pr ready をブランチ名指定(または対象ブランチをチェックアウトして引数なし)で使う。"
+fi
+if has '(^|[;&|[:space:]])gh[[:space:]]+pr[[:space:]]+ready([[:space:]]|$)'; then
+  # 対象ブランチの解決: 引数なし = チェックアウト中のブランチ / ブランチ名。番号・URL は先端を解決できない
+  READY_ARG=$(printf '%s' "$COMMAND" |
+    sed -nE 's/.*gh[[:space:]]+pr[[:space:]]+ready[[:space:]]*//p' | sed -E 's/[;&|].*$//' |
+    awk '{for(i=1;i<=NF;i++){if($i !~ /^-/){print $i; exit}}}')
+  if printf '%s' "${READY_ARG}" | grep -qE '^[0-9]+$|^https?://'; then
+    deny "このリポジトリ($ROOT)はゲート運用。PR 番号・URL では対象ブランチの先端を解決できない — gh pr ready <ブランチ名> か、対象ブランチをチェックアウトして引数なしで実行する。"
+  fi
+  READY_BRANCH="${READY_ARG:-$(git -C "$WORKDIR" rev-parse --abbrev-ref HEAD 2>/dev/null || true)}"
+  [ -n "${READY_BRANCH}" ] || deny "このリポジトリ($ROOT)はゲート運用。レビュー可能化の対象ブランチを解決できない。"
+  READY_SHA=$(git -C "$WORKDIR" rev-parse --verify "refs/heads/${READY_BRANCH}^{commit}" 2>/dev/null || true)
+  [ -n "${READY_SHA}" ] || deny "このリポジトリ($ROOT)はゲート運用。ブランチ「${READY_BRANCH}」の先端を解決できない(ローカルにブランチがあるか確認する)。"
+  RESP=$(curl -fsS --max-time 3 --get \
+    --data-urlencode "path=$WORKDIR" --data-urlencode "sha=${READY_SHA}" \
+    "http://127.0.0.1:${GATE_PORT:-7350}/api/submitted" 2>/dev/null) ||
+    deny "このリポジトリ($ROOT)はゲート運用。ゲートのデーモンに照会できない(レビュー可能化は提出の記録との照合が必要)— claude-gate doctor でデーモンを確認する。"
+  if [ "$(printf '%s' "$RESP" | jq -r '.submitted' 2>/dev/null)" = "true" ]; then
+    exit 0 # ブランチ先端が提出済みの報告と一致 — レビュー可能化はエージェント自身が行ってよい
+  fi
+  deny "このリポジトリ($ROOT)はゲート運用。ブランチ「${READY_BRANCH}」の先端($(printf '%s' "${READY_SHA}" | cut -c1-7))に一致する提出済みの報告が無い — judge で合格させ、submit で提出を記録してから gh pr ready を実行する。"
 fi
 
-# --- PR の作成は下書きだけ(レビュー依頼が飛ぶ非ドラフト作成は提出と同じ公式化) ---
+# --- PR の作成は下書きだけ(レビュー依頼が飛ぶ非ドラフト作成はレビュー可能化と同じ) ---
 if has '(^|[;&|[:space:]])gh[[:space:]]+pr[[:space:]]+create([[:space:]]|$)'; then
   if ! has '(^|[[:space:]])(--draft|-d)([[:space:]]|$|=)'; then
-    deny "このリポジトリ($ROOT)はゲート運用。PR は --draft を付けて下書きで作る(共有は自由)。レビュー依頼(ドラフト解除)は合格した報告の submit だけが行える。"
+    deny "このリポジトリ($ROOT)はゲート運用。PR は --draft を付けて下書きで作る(共有は自由)。レビュー可能化は submit で提出を記録してから gh pr ready で行う。"
   fi
 fi
 
@@ -110,7 +135,7 @@ if has '(^|[;&|[:space:]])git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:
     [ -n "$DST" ] || continue
     for DEF in $DEFAULTS; do
       if [ "$DST" = "$DEF" ]; then
-        deny "このリポジトリ($ROOT)はゲート運用。デフォルトブランチ($DST)への直接 push は取り込み相当 — エージェントは行えない。feature ブランチへ push して下書きPR を作り(共有は自由)、合格した報告を submit でレビュー可能にする。取り込みは人間に依頼する。"
+        deny "このリポジトリ($ROOT)はゲート運用。デフォルトブランチ($DST)への直接 push は取り込み — 人間だけの操作でエージェントは行えない。feature ブランチへ push して下書きPR を作り(共有は自由)、submit で提出を記録する。main 直運用では、人間が提出の記録をダッシュボードで確かめて自分で push する。"
       fi
     done
   done

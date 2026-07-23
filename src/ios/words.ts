@@ -251,3 +251,151 @@ export interface Report {
 export type Reply<S> =
   | { status: "ok"; state: S; note?: string; nextSteps: string[] }
   | { status: "rejected"; reason: string; fix: string; nextSteps: string[] };
+
+// ─── ドメインモデルの1枚グラフ(モデル全体図)───
+// 概念の台帳と、概念間の関係。語彙と同格の一級市民 — ガイドのモデル全体図はこの宣言の
+// レンダリングにすぎない(図だけの情報を作らない)。
+// 関係を型フィールドから自動抽出しないのは意図: このモデルの中心は型に現れない関係
+// (導出・生成・人間だけの操作)だから。宣言が定義であり、概念の改名・削除は typecheck が検知する。
+
+export type ConceptCategory = "actor" | "record" | "vocabulary" | "derived" | "operation" | "world";
+
+export const CONCEPT_CATEGORY_LABEL: Record<ConceptCategory, string> = {
+  actor: "役割",
+  record: "記録(不変)",
+  vocabulary: "語彙(分類・値)",
+  derived: "導出(保存しない)",
+  operation: "操作",
+  world: "世界(git・GitHub)",
+};
+
+export interface Concept {
+  ja: string; // 正式名(日本語の日常語)
+  en: string; // 英語表記(人間向けの併記。機械の識別子はキー)
+  category: ConceptCategory;
+}
+
+export const CONCEPTS = {
+  // 役割
+  agent: { ja: "エージェント", en: "agent", category: "actor" },
+  gate: { ja: "ゲート", en: "gate", category: "actor" },
+  human: { ja: "人間", en: "human", category: "actor" },
+  verifier: { ja: "検証器", en: "verifier", category: "actor" },
+  // 記録(不変)
+  repository: { ja: "リポジトリ", en: "repository", category: "record" },
+  report: { ja: "完了報告", en: "report", category: "record" },
+  behavior: { ja: "動作", en: "behavior", category: "record" },
+  build: { ja: "ビルド", en: "build", category: "record" },
+  evidence: { ja: "証拠", en: "evidence", category: "record" },
+  judgment: { ja: "判定結果", en: "judgment", category: "record" },
+  submission: { ja: "提出の記録", en: "submission", category: "record" },
+  confirm_delta: { ja: "差分確認", en: "confirm_delta", category: "record" },
+  event: { ja: "できごと", en: "event", category: "record" },
+  // 語彙(分類・値)
+  build_id: { ja: "ビルドID", en: "build_id", category: "vocabulary" },
+  source: { ja: "出所", en: "source", category: "vocabulary" },
+  verdict: { ja: "判定", en: "verdict", category: "vocabulary" },
+  change_kind: { ja: "変更の種類", en: "change_kind", category: "vocabulary" },
+  check: { ja: "確かめ方", en: "check", category: "vocabulary" },
+  passline: { ja: "合格ライン", en: "passline", category: "vocabulary" },
+  check_run: { ja: "確かめの記録", en: "check_run", category: "vocabulary" },
+  human_check: { ja: "人間確認", en: "human_check", category: "vocabulary" },
+  cannot_see: { ja: "見えないこと台帳", en: "cannot_see registry", category: "vocabulary" },
+  dirty: { ja: "未コミット変更あり", en: "dirty", category: "vocabulary" },
+  // 導出(保存しない)
+  attention: { ja: "注意", en: "attention", category: "derived" },
+  report_group: { ja: "報告のグループ", en: "report group", category: "derived" },
+  drift: { ja: "ずれ", en: "drift", category: "derived" },
+  awaiting_adoption: { ja: "取り込み待ち", en: "awaiting adoption", category: "derived" },
+  entered_default_branch: { ja: "デフォルトブランチに入った", en: "entered default branch", category: "derived" },
+  // 操作
+  submit: { ja: "提出", en: "submit", category: "operation" },
+  share: { ja: "共有", en: "share", category: "operation" },
+  pr_ready: { ja: "レビュー可能化", en: "gh pr ready", category: "operation" },
+  merge: { ja: "取り込み", en: "merge", category: "operation" },
+  // 世界(git・GitHub)
+  branch: { ja: "作業ブランチ", en: "branch", category: "world" },
+  draft_pr: { ja: "下書きPR", en: "draft PR", category: "world" },
+  worksite: { ja: "作業場", en: "worksite", category: "world" },
+} as const satisfies Record<string, Concept>;
+
+export type ConceptId = keyof typeof CONCEPTS;
+
+// 関係の種類。読み方の文型: 持つ/参照する/作る =「AはBを◯◯」、
+// derives_from =「AはBから導出される」、is_a =「AはBの一種」
+export type RelationKind = "has" | "refers" | "makes" | "derives_from" | "is_a";
+
+export const RELATION_KIND_LABEL: Record<RelationKind, string> = {
+  has: "持つ",
+  refers: "参照する",
+  makes: "作る",
+  derives_from: "から導出される",
+  is_a: "の一種",
+};
+
+export interface DomainRelation {
+  from: ConceptId;
+  to: ConceptId;
+  kind: RelationKind;
+  label?: string; // 図のエッジに出す個別の説明(無い関係は kind の読みで足りる)
+}
+
+export const DOMAIN_RELATIONS: DomainRelation[] = [
+  // 包含: リポジトリ ⊃ {完了報告, ビルド, 証拠, できごと}
+  { from: "repository", to: "report", kind: "has" },
+  { from: "repository", to: "build", kind: "has" },
+  { from: "repository", to: "evidence", kind: "has" },
+  { from: "repository", to: "event", kind: "has" },
+  // 完了報告の中身。参照は 報告 → 証拠 → ビルド の片方向
+  { from: "report", to: "behavior", kind: "has", label: "動作一覧(オープン時に固定)" },
+  { from: "report", to: "evidence", kind: "refers", label: "動作ごとに紐づける" },
+  { from: "evidence", to: "build", kind: "refers", label: "出所(どのビルドから取れたか)" },
+  { from: "behavior", to: "change_kind", kind: "refers", label: "何を変えたか" },
+  { from: "behavior", to: "check", kind: "refers", label: "確かめ計画として宣言" },
+  { from: "build_id", to: "build", kind: "derives_from", label: "中身から計算(偽れない)" },
+  { from: "report", to: "branch", kind: "refers", label: "帰属先(オープン時に記録)" },
+  // 判定: 決定論の pure function。証拠の集合が変われば無効
+  { from: "report", to: "judgment", kind: "has", label: "証拠が変われば無効" },
+  { from: "gate", to: "judgment", kind: "makes", label: "決定論で判定" },
+  { from: "judgment", to: "verdict", kind: "has", label: "動作ごとに" },
+  { from: "judgment", to: "passline", kind: "refers", label: "照合する" },
+  { from: "judgment", to: "cannot_see", kind: "refers", label: "照合する" },
+  { from: "passline", to: "change_kind", kind: "refers", label: "変更の種類ごとに" },
+  { from: "passline", to: "check", kind: "refers", label: "使ってよい下限を列挙" },
+  { from: "cannot_see", to: "check", kind: "refers", label: "見えない確かめ方" },
+  { from: "cannot_see", to: "verifier", kind: "refers", label: "見えないことがある" },
+  // 役割: 実行は自由、採用は厳格
+  { from: "agent", to: "report", kind: "makes", label: "開く" },
+  { from: "agent", to: "build", kind: "makes", label: "自由に作る" },
+  { from: "verifier", to: "evidence", kind: "makes", label: "観測を取る" },
+  { from: "gate", to: "evidence", kind: "makes", label: "出所を照合して受理" },
+  { from: "gate", to: "check_run", kind: "makes", label: "自分でコマンドを実行" },
+  { from: "check_run", to: "evidence", kind: "is_a" },
+  // 人間の権限: 照合を飛ばす形ではなく、機械に見えない判断を記録として供給する形
+  { from: "human", to: "human_check", kind: "makes", label: "人間だけが作れる" },
+  { from: "human_check", to: "evidence", kind: "is_a" },
+  { from: "human", to: "confirm_delta", kind: "makes", label: "差分を見て引き受ける" },
+  { from: "report", to: "confirm_delta", kind: "has", label: "連鎖の記録" },
+  { from: "confirm_delta", to: "judgment", kind: "refers", label: "sourceSha を先へ進める" },
+  // 提出と取り込み: 抽象(記録)と具体(ガード)の分離
+  { from: "submit", to: "submission", kind: "makes", label: "記録だけの状態遷移" },
+  { from: "report", to: "submission", kind: "has", label: "終着" },
+  { from: "submission", to: "judgment", kind: "refers", label: "sourceSha を転記" },
+  { from: "pr_ready", to: "submission", kind: "refers", label: "ブランチ先端と一致で hook が通す" },
+  { from: "human", to: "merge", kind: "makes", label: "人間だけの操作" },
+  { from: "merge", to: "submission", kind: "refers", label: "記録を確かめて取り込む" },
+  { from: "agent", to: "share", kind: "makes", label: "可逆・自由領域" },
+  { from: "share", to: "draft_pr", kind: "makes", label: "下書きPRを作る" },
+  { from: "share", to: "branch", kind: "refers", label: "feature ブランチへ push" },
+  // できごと: オブジェクトに従属する監査記録
+  { from: "event", to: "report", kind: "refers" },
+  { from: "event", to: "build", kind: "refers" },
+  { from: "event", to: "evidence", kind: "refers" },
+  // 導出: 記録は不変、注意は毎回計算する
+  { from: "attention", to: "event", kind: "derives_from", label: "未解決の拒否を毎回計算" },
+  { from: "report_group", to: "report", kind: "derives_from", label: "状態から「誰の番か」" },
+  { from: "drift", to: "judgment", kind: "derives_from", label: "検証したソースと" },
+  { from: "drift", to: "branch", kind: "derives_from", label: "ブランチ先端の比較" },
+  { from: "awaiting_adoption", to: "submission", kind: "derives_from", label: "sha が入ったか世界に聞く" },
+  { from: "entered_default_branch", to: "submission", kind: "derives_from", label: "終着の静けさ" },
+];

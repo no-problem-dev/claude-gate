@@ -1,14 +1,20 @@
+import { lazy, Suspense } from "react";
 import { Card, Chip } from "@heroui/react";
 import {
   CHANGE_KINDS,
   CHANGE_KIND_LABEL,
   CHECK_KINDS,
   CHECK_LABEL,
+  CONCEPTS,
   EVIDENCE_KIND_LABEL,
   VERDICT_LABEL,
+  type ConceptId,
 } from "../../src/ios/words";
 import { SectionTitle } from "./components";
 import { LoopDiagram, ReportStateDiagram, VerifyDiagram } from "./Diagrams";
+
+// モデル全体図はグラフ描画(React Flow + ELK)を含むので遅延ロードする(ガイド本文を重くしない)
+const DomainModelGraph = lazy(() => import("./DomainModelGraph"));
 
 // ガイド: この仕組み(形式言語)の人間向け説明書。
 // 語彙の列挙(変更の種類・確かめ方・判定値)は words.ts をそのままレンダリングする(写しを持たない)。
@@ -16,9 +22,9 @@ import { LoopDiagram, ReportStateDiagram, VerifyDiagram } from "./Diagrams";
 
 export function GuideView() {
   return (
-    <div className="max-w-[760px]">
+    <div>
       {/* ① これは何 */}
-      <section className="pt-2 pb-8">
+      <section className="max-w-[760px] pt-2 pb-8">
         <h2 className="text-2xl leading-snug font-semibold tracking-tight">
           AI の「できました」に、
           <br />
@@ -33,7 +39,7 @@ export function GuideView() {
       </section>
 
       {/* ② なぜ */}
-      <section className="pb-8">
+      <section className="max-w-[760px] pb-8">
         <SectionTitle>なぜ作ったか — 実際に起きた事故から</SectionTitle>
         <div className="grid gap-3 sm:grid-cols-2">
           <AccidentCard title="古いビルドを見て「直った」と誤判定">
@@ -79,7 +85,7 @@ export function GuideView() {
       </section>
 
       {/* ③ どう動く */}
-      <section className="pb-8">
+      <section className="max-w-[760px] pb-8">
         <SectionTitle>どう動くか — 証拠つき完了報告のループ</SectionTitle>
         <Card className="mb-3 p-4">
           <LoopDiagram />
@@ -180,7 +186,7 @@ export function GuideView() {
       </section>
 
       {/* ④ ことば */}
-      <section className="pb-8">
+      <section className="max-w-[760px] pb-8">
         <SectionTitle>ことば — この形式言語の語彙</SectionTitle>
         <Card className="mb-3 p-4">
           <p className="text-[14px] leading-relaxed">
@@ -199,43 +205,71 @@ export function GuideView() {
               </tr>
             </thead>
             <tbody>
-              <Word ja="完了報告" en="report">「できました」の型。作業名と動作一覧を持つ(空の一覧では開けない)</Word>
-              <Word ja="ビルド" en="build">検証対象の成果物</Word>
-              <Word ja="ビルドID" en="build_id">中身から計算する同一性。偽れない</Word>
-              <Word ja="証拠" en="evidence">
+              <Word id="report">「できました」の型。作業名と動作一覧を持つ(空の一覧では開けない)</Word>
+              <Word id="build">検証対象の成果物</Word>
+              <Word id="build_id">中身から計算する同一性。偽れない</Word>
+              <Word id="evidence">
                 受理された観測の記録({Object.values(EVIDENCE_KIND_LABEL).join("・")})。人間確認だけは人間の CLI(claude-gate confirm)でしか作れない
               </Word>
-              <Word ja="出所" en="source">その観測がどのビルドから取れたか</Word>
-              <Word ja="判定" en="verdict">
+              <Word id="source">その観測がどのビルドから取れたか</Word>
+              <Word id="verdict">
                 動作の判定は {Object.values(VERDICT_LABEL).join(" / ")} の3値。報告の判定は 合格 / 不合格 / 確認できず(層の違う語を混ぜない)
               </Word>
-              <Word ja="変更の種類" en="change_kind">
+              <Word id="change_kind">
                 何を変えたか({CHANGE_KINDS.map((k) => CHANGE_KIND_LABEL[k]).join(" / ")})
               </Word>
-              <Word ja="確かめ方" en="check">
+              <Word id="check">
                 動作をどう確かめるか({CHECK_KINDS.map((k) => CHECK_LABEL[k]).join(" / ")})。宣言に使える語彙はこの{CHECK_KINDS.length}つに固定
               </Word>
-              <Word ja="合格ライン" en="passline">変更の種類ごとに使ってよい確かめ方。下げる例外は人間が gate.yaml を変える(git に残る)</Word>
-              <Word ja="確かめの記録" en="check_run">ゲート自身がコマンドを実行した結果(終了コード + 出力ログ)の証拠</Word>
-              <Word ja="見えないこと台帳" en="cannot_see registry">検証器に見えない領域のデータ(課金 × シミュレータ等)。一致したら判定は 確認できず</Word>
-              <Word ja="検証器" en="verifier">観測を取る道具。見えないことがある</Word>
-              <Word ja="ゲート" en="gate">受理を判断する常駐デーモン(この仕組みの実行実体)</Word>
-              <Word ja="作業場" en="worksite">worktree + ビルド置き場 + 専用シミュレータの一式</Word>
-              <Word ja="未コミット変更あり" en="dirty">どのコミットの成果物か確定できない状態</Word>
-              <Word ja="共有" en="share">feature ブランチへの push・下書きPR の作成。可逆なのでエージェントの自由領域(前提: デフォルトブランチは GitHub 側のブランチ保護で守る)</Word>
-              <Word ja="下書きPR" en="draft PR">共有の置き場。レビュー依頼は飛ばず、閉じれば戻る</Word>
-              <Word ja="作業ブランチ" en="branch">報告の帰属先(オープン時に記録)。人間の動きは非同期 — 差分確認・提出はローカルのチェックアウトでなくブランチを基準に動く</Word>
-              <Word ja="提出" en="submit">検証と人間確認が終わった報告を「検証したソースを受け入れた」と記録する状態遷移。git や gh のコマンドは実行しない。FSM の終着</Word>
-              <Word ja="レビュー可能化" en="gh pr ready">取り込みに向かう操作。ブランチ先端が提出の記録と一致するときだけガード(hook)が通す — エージェント自身が実行する</Word>
-              <Word ja="ずれ" en="drift">検証したソースの後に作業ブランチへ積まれたコミット。状態ではなく導出 — 発生した瞬間から報告カードに出す</Word>
-              <Word ja="差分確認" en="confirm_delta">ずれの差分を人間が見て「判定は引き続き有効」と引き受ける記録。人間だけの操作 — 判定が sourceSha を先へ進め、提出の記録が指す検証済みソースを最新に保つ</Word>
-              <Word ja="取り込み" en="merge">不可逆の採用(merge・デフォルトブランチへの push)。人間だけの操作 — エージェントの語彙に入れない</Word>
-              <Word ja="取り込み待ち" en="awaiting adoption">提出済みだが、受け入れた sha がまだ origin のデフォルトブランチに入っていない状態。導出(保存しない)— 人間の番</Word>
-              <Word ja="デフォルトブランチに入った" en="entered default branch">受け入れた sha が origin のデフォルトブランチの祖先。導出 — このマシンが最後に取得した時点の姿</Word>
+              <Word id="passline">変更の種類ごとに使ってよい確かめ方。下げる例外は人間が gate.yaml を変える(git に残る)</Word>
+              <Word id="check_run">ゲート自身がコマンドを実行した結果(終了コード + 出力ログ)の証拠</Word>
+              <Word id="cannot_see">検証器に見えない領域のデータ(課金 × シミュレータ等)。一致したら判定は 確認できず</Word>
+              <Word id="verifier">観測を取る道具。見えないことがある</Word>
+              <Word id="gate">受理を判断する常駐デーモン(この仕組みの実行実体)</Word>
+              <Word id="worksite">worktree + ビルド置き場 + 専用シミュレータの一式</Word>
+              <Word id="dirty">どのコミットの成果物か確定できない状態</Word>
+              <Word id="share">feature ブランチへの push・下書きPR の作成。可逆なのでエージェントの自由領域(前提: デフォルトブランチは GitHub 側のブランチ保護で守る)</Word>
+              <Word id="draft_pr">共有の置き場。レビュー依頼は飛ばず、閉じれば戻る</Word>
+              <Word id="branch">報告の帰属先(オープン時に記録)。人間の動きは非同期 — 差分確認・提出はローカルのチェックアウトでなくブランチを基準に動く</Word>
+              <Word id="submit">検証と人間確認が終わった報告を「検証したソースを受け入れた」と記録する状態遷移。git や gh のコマンドは実行しない。FSM の終着</Word>
+              <Word id="pr_ready">取り込みに向かう操作。ブランチ先端が提出の記録と一致するときだけガード(hook)が通す — エージェント自身が実行する</Word>
+              <Word id="drift">検証したソースの後に作業ブランチへ積まれたコミット。状態ではなく導出 — 発生した瞬間から報告カードに出す</Word>
+              <Word id="confirm_delta">ずれの差分を人間が見て「判定は引き続き有効」と引き受ける記録。人間だけの操作 — 判定が sourceSha を先へ進め、提出の記録が指す検証済みソースを最新に保つ</Word>
+              <Word id="merge">不可逆の採用(merge・デフォルトブランチへの push)。人間だけの操作 — エージェントの語彙に入れない</Word>
+              <Word id="awaiting_adoption">提出済みだが、受け入れた sha がまだ origin のデフォルトブランチに入っていない状態。導出(保存しない)— 人間の番</Word>
+              <Word id="entered_default_branch">受け入れた sha が origin のデフォルトブランチの祖先。導出 — このマシンが最後に取得した時点の姿</Word>
             </tbody>
           </table>
         </Card>
-        <Card className="mt-3 p-4">
+
+      </section>
+
+      {/* ④' モデル全体図: これだけ本文の幅制約(max-w-[760px])を外して広い面で描く */}
+      <section className="max-w-[1400px] pb-8">
+        <h3 className="mb-2 text-[13px] font-semibold">モデル全体図 — 概念と関係の1枚</h3>
+        <Card className="p-4">
+          <p className="mb-3 max-w-[760px] text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-300">
+            この仕組みの本質は、動作確認と品質を保つ営み全体の<strong>ドメインモデリング</strong>で、
+            プラグインやこのダッシュボードはその表象にすぎない。
+            下の図は言語の定義(概念の台帳と関係の宣言)をそのまま描いたもの —
+            実線は 持つ / 参照する / 作る、破線は<strong>導出</strong>(保存せず毎回計算する)、
+            点線は「証拠の一種」。関係を持たない語(作業場・未コミット変更あり等)は上の対訳表だけに出る。
+          </p>
+          <Suspense
+            fallback={
+              <div className="grid h-[720px] place-items-center text-[13px] text-zinc-500 dark:text-zinc-400">
+                全体図を読み込んでいます…
+              </div>
+            }
+          >
+            <DomainModelGraph />
+          </Suspense>
+        </Card>
+      </section>
+
+      {/* ④'' ことばの続き */}
+      <section className="max-w-[760px] pb-8">
+        <Card className="p-4">
           <p className="text-[14px] leading-relaxed">
             判定が OK / NG の2値ではなく<strong>「確認できず」を含む3値</strong>なのは、
             検証器には見えないことがあるから(例: 課金フローはシミュレータの自動操作では検証が成立しない)。
@@ -254,7 +288,7 @@ export function GuideView() {
       </section>
 
       {/* ⑤ いま */}
-      <section className="pb-8">
+      <section className="max-w-[760px] pb-8">
         <SectionTitle>いま、どこまでできているか</SectionTitle>
         <div className="grid gap-2">
           <StatusRow chip={<Chip size="sm" color="success">稼働中</Chip>} name="登録と照合(スライス1)">
@@ -368,11 +402,13 @@ function Step({ n, name, en, children }: { n: number; name: string; en?: string;
   );
 }
 
-function Word({ ja, en, children }: { ja: string; en: string; children: React.ReactNode }) {
+// 正式名と識別子は概念の台帳(words.ts の CONCEPTS)から引く。この表が持つのは一言説明だけ
+function Word({ id, children }: { id: ConceptId; children: React.ReactNode }) {
+  const c = CONCEPTS[id];
   return (
     <tr className="border-b border-black/5 last:border-b-0 dark:border-white/5">
-      <td className="px-4 py-2 font-semibold whitespace-nowrap">{ja}</td>
-      <td className="px-4 py-2 font-mono text-xs text-zinc-500 dark:text-zinc-400">{en}</td>
+      <td className="px-4 py-2 font-semibold whitespace-nowrap">{c.ja}</td>
+      <td className="px-4 py-2 font-mono text-xs text-zinc-500 dark:text-zinc-400">{c.en}</td>
       <td className="px-4 py-2 text-zinc-600 dark:text-zinc-300">{children}</td>
     </tr>
   );

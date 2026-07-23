@@ -23,7 +23,10 @@ export const DEFAULT_PASSLINE: Passline = {
 export const BUNDLED_CANNOT_SEE: CannotSeeEntry[] = [
   {
     checks: ["screenshot", "interaction_log", "ui_test", "video", "launch_check"],
-    keywords: ["課金", "購入", "サブスク", "ペイウォール", "買い切り", "StoreKit"],
+    // 「購入」単独は禁止: 買い物系アプリの一般語（例:「購入直後行の表示色」）に部分一致して
+    // 課金と無関係な appearance 動作を確認できず化した実誤検知がある(stock-radar 2026-07-23)。
+    // 課金文脈は複合語でだけ拾う
+    keywords: ["課金", "アプリ内購入", "IAP", "サブスク", "ペイウォール", "買い切り", "StoreKit"],
     reason: ".storekit 設定は Xcode IDE Run でのみ有効。シミュレータの自動操作(simctl 経由)は実サンドボックスに落ち、課金フローの検証が成立しない",
     instead: "human_check(Xcode Run で人間が確認)",
   },

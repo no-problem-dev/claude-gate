@@ -54,11 +54,6 @@ export function GuideView() {
             「問題を無視して PASS にするな」と書いたスキルは、書いてあるだけで守られる保証がない。
             <strong>約束ではなく構造</strong>で守る必要があった。
           </AccidentCard>
-          <AccidentCard title="確認したのに、提出できない">
-            前日に検証した報告を、別の作業中に人間が確認して提出したら「コミットが動いている」と拒否された。
-            <strong>人間の動きは非同期</strong>(検証は過去・確認はさっき・提出はいま)なのに、
-            提出がローカルの状態に依存していた。
-          </AccidentCard>
         </div>
         <Card className="mt-3 p-4">
           <p className="text-[14px] leading-relaxed">

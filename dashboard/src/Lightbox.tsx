@@ -1,4 +1,4 @@
-import { Button } from "@heroui/react";
+import { Modal } from "@heroui/react";
 import { useEffect, useState } from "react";
 import {
   Build,
@@ -31,28 +31,23 @@ export function Lightbox({
   onOpenBuild: (buildId: string) => void;
   onOpenReport: (reportId: string) => void;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const fileUrl = `/api/evidence/${repoKey}/${evidence.evidenceId}/file`;
 
+  // 覆いは HeroUI の Modal に任せる: 焦点の閉じ込め・初期焦点・閉じたときの復帰・背後のスクロール停止を
+  // 自前の fixed inset-0 では持てなかった。Esc と背景クリックで閉じるのは今までどおり
   return (
-    <div
-      className="fixed inset-0 z-10 grid place-items-center bg-black/55 p-8"
-      role="dialog"
-      aria-modal="true"
-      aria-label="証拠の詳細"
-      onClick={onClose}
+    <Modal
+      isOpen
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onClose();
+      }}
     >
-      <div
-        className="bg-background relative grid max-h-[calc(100vh-64px)] w-full max-w-[900px] grid-cols-1 overflow-hidden rounded-2xl shadow-2xl sm:grid-cols-[minmax(0,1.4fr)_minmax(240px,1fr)]"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <Modal.Backdrop>
+        <Modal.Container size="lg" className="sm:w-full sm:max-w-[900px]">
+          <Modal.Dialog
+            aria-label="証拠の詳細"
+            className="grid max-h-[calc(100vh-64px)] w-full max-w-[900px] grid-cols-1 overflow-hidden p-0 sm:grid-cols-[minmax(0,1.4fr)_minmax(240px,1fr)]"
+          >
         <div className="grid min-h-60 place-items-center bg-black/4 dark:bg-white/4">
           {evidence.kind === "screenshot" ? (
             <img
@@ -87,7 +82,7 @@ export function Lightbox({
                 <ReportLink
                   key={`${use.reportId}-${use.behaviorIndex}`}
                   label={`${use.reportTitle} · 動作${use.behaviorIndex}`}
-                  title={`報告「${use.reportTitle}」の動作${use.behaviorIndex}を覆う証拠。クリックで報告へ`}
+                  hint={`報告「${use.reportTitle}」の動作${use.behaviorIndex}を覆う証拠。押すと報告へ`}
                   onOpen={() => {
                     onOpenReport(use.reportId);
                     onClose();
@@ -136,18 +131,11 @@ export function Lightbox({
             </Fact>
           </dl>
         </aside>
-        <Button
-          className="absolute top-2.5 right-2.5"
-          isIconOnly
-          size="sm"
-          variant="ghost"
-          onPress={onClose}
-          aria-label="閉じる"
-        >
-          ✕
-        </Button>
-      </div>
-    </div>
+            <Modal.CloseTrigger className="absolute top-2.5 right-2.5" aria-label="閉じる" />
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
   );
 }
 

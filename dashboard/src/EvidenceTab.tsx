@@ -56,16 +56,18 @@ export function EvidenceTab({
               {checkRuns.map((item, i) => (
                 <li key={item.evidenceId} className={i > 0 ? "border-t border-black/8 dark:border-white/8" : ""}>
                   <div className="grid gap-1.5 px-3.5 py-3">
+                    {/* 折り返さない1行にして時刻を右端に置く。折り返す行で ml-auto を使うと
+                        時刻だけが単独の行に落ちる */}
                     <button
-                      className="flex w-full cursor-pointer flex-wrap items-center gap-2 text-left"
+                      className="flex w-full cursor-pointer items-center gap-2 text-left"
                       onClick={() => onOpenEvidence(item.evidenceId)}
                     >
                       <span aria-hidden>🧪</span>
-                      <span className="text-[13px] font-semibold">
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">
                         {item.check !== undefined ? checkLabel(item.check) : "確かめ"}
                       </span>
                       <ExitCodeChip exitCode={item.exitCode} />
-                      <Time iso={item.attachedAt} className="ml-auto" />
+                      <Time iso={item.attachedAt} />
                     </button>
                     {item.command !== undefined && (
                       <code className="clamp-1 font-mono text-[11px] break-all text-zinc-500 dark:text-zinc-400">
@@ -101,15 +103,15 @@ export function EvidenceTab({
                   <li key={item.evidenceId} className={i > 0 ? "border-t border-black/8 dark:border-white/8" : ""}>
                     <div className="grid gap-1.5 px-3.5 py-3">
                       <button
-                        className="flex w-full cursor-pointer flex-wrap items-center gap-2 text-left"
+                        className="flex w-full cursor-pointer items-center gap-2 text-left"
                         onClick={() => onOpenEvidence(item.evidenceId)}
                       >
                         <span aria-hidden>{evidenceIcon(item.kind)}</span>
-                        <span className="text-[13px] font-semibold">{EVIDENCE_KIND_LABEL[item.kind]}</span>
-                        <span className="min-w-0 text-[13px] text-zinc-600 dark:text-zinc-300">
+                        <span className="shrink-0 text-[13px] font-semibold">{EVIDENCE_KIND_LABEL[item.kind]}</span>
+                        <span className="min-w-0 flex-1 truncate text-[13px] text-zinc-600 dark:text-zinc-300">
                           {evidenceCaption(item)}
                         </span>
-                        <Time iso={item.attachedAt} className="ml-auto" />
+                        <Time iso={item.attachedAt} />
                       </button>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         <UsedByChips item={item} onOpenReport={onOpenReport} />
@@ -160,10 +162,10 @@ function VisualCard({
         )}
       </button>
       <div className="px-3.5 py-3">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <AcceptBadge />
           <TaxonomyChip>{EVIDENCE_KIND_LABEL[item.kind]}</TaxonomyChip>
-          <Time iso={item.attachedAt} className="ml-auto" />
+          <Time iso={item.attachedAt} />
         </div>
         <p className="clamp-2 mt-2 mb-1.5 text-[13px]" title={evidenceCaption(item)}>
           {evidenceCaption(item)}
@@ -189,7 +191,7 @@ function UsedByChips({ item, onOpenReport }: { item: Evidence; onOpenReport: (re
         <ReportLink
           key={`${use.reportId}-${use.behaviorIndex}`}
           label={`${use.reportTitle} · 動作${use.behaviorIndex}`}
-          title={`報告「${use.reportTitle}」の動作${use.behaviorIndex}を覆う証拠。クリックで報告へ`}
+          hint={`報告「${use.reportTitle}」の動作${use.behaviorIndex}を覆う証拠。押すと報告へ`}
           onOpen={() => onOpenReport(use.reportId)}
         />
       ))}

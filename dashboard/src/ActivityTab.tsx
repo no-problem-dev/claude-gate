@@ -1,7 +1,7 @@
 import { Card } from "@heroui/react";
 import { useMemo } from "react";
 import { GateEvent, RepoDetail, dayLabel, eventSentence } from "./lib";
-import { AcceptBadge, BuildDot, RejectBadge, ReportLink, Time } from "./components";
+import { AcceptBadge, BuildChip, RejectBadge, ReportLink, Time } from "./components";
 
 // できごとタブ: 監査ログを日本語の文で。日付でセクション分けし、
 // 各行に対象オブジェクトのチップ(報告 = 作業名 / ビルド = 色ドット)を付ける。
@@ -135,21 +135,13 @@ function EventRow({
       {report !== undefined && (
         <ReportLink
           label={report.title}
-          title={`報告「${report.title}」を開く`}
+          hint={`報告「${report.title}」を開く`}
           onOpen={() => onOpenReport(report.reportId)}
         />
       )}
-      {buildExists && (
-        <button
-          className="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-zinc-600 transition-colors hover:text-blue-600 dark:text-zinc-300 dark:hover:text-blue-400"
-          title="ビルドを開く"
-          onClick={() => onOpenBuild(event.buildId!)}
-        >
-          <BuildDot buildId={event.buildId!} size={8} />
-          <span className="font-mono text-xs">{event.buildId!.slice(0, 6)}</span>
-        </button>
-      )}
-      <Time iso={event.ts} className="ml-auto" />
+      {buildExists && <BuildChip buildId={event.buildId!} onOpen={onOpenBuild} />}
+      {/* 折り返す行なので ml-auto を使わない — 折り返したときに時刻だけが単独の行に落ちる */}
+      <Time iso={event.ts} />
     </li>
   );
 }

@@ -1,4 +1,4 @@
-import { Card, Chip } from "@heroui/react";
+import { Card, Chip, toast } from "@heroui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AWAITING_ADOPTION_LABEL,
@@ -22,6 +22,8 @@ import {
   BuildLink,
   EvidenceThumb,
   ExpandableText,
+  Hint,
+  NoteField,
   RejectBadge,
   ReportStateChip,
   SectionTitle,
@@ -29,6 +31,16 @@ import {
   Time,
   useWriteLock,
 } from "./components";
+
+// 書き込みの結果は Toast で伝える。カードの中の一行に書くと、5秒ポーリングの再描画で消える。
+// 失敗は自動で消さない(timeout 0)— 何が起きたか読む時間を人に渡す
+function announceOk(message: string): void {
+  toast.success(message);
+}
+
+function announceFailure(message: string, fix?: string): void {
+  toast.danger(message, { description: fix, timeout: 0 });
+}
 
 // 完了報告タブ: この仕組みの主役オブジェクト。
 // 状態グループで並べる(人間確認待ち → 提出待ち → 進行中 → 終着)。「今、誰の番か」が先、個々のカードが後。
@@ -160,30 +172,29 @@ function ReportCard({
         <h3 className="text-base font-semibold">{report.title}</h3>
         <ReportStateChip state={report.state} />
         {report.branch !== undefined && (
-          <span className="font-mono text-[11px] text-zinc-500 dark:text-zinc-400" title="作業ブランチ">
-            {report.branch}
-          </span>
+          <Hint text="この報告の作業ブランチ">
+            <span className="font-mono text-[11px] text-zinc-500 dark:text-zinc-400">{report.branch}</span>
+          </Hint>
         )}
         {report.judgment !== undefined && (
-          <span className="text-xs text-zinc-500 dark:text-zinc-400" title="判定した時刻">
-            判定 {formatTime(report.judgment.judgedAt)}
-          </span>
+          <Hint text="ゲートが判定した時刻">
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              判定 {formatTime(report.judgment.judgedAt)}
+            </span>
+          </Hint>
         )}
         {report.buildIds.length > 1 && (
-          <Chip
-            color="warning"
-            size="sm"
-            title="動作ごとに別のビルドの証拠が混ざっている。最新のビルドで全動作が動くことの保証にはならない"
-          >
-            ⚠ 複数ビルドの証拠が混在
-          </Chip>
+          <Hint text="動作ごとに別のビルドの証拠が混ざっている。最新のビルドで全動作が動くことの保証にはならない">
+            <Chip color="warning" size="sm">
+              ⚠ 複数ビルドの証拠が混在
+            </Chip>
+          </Hint>
         )}
         <span className="text-xs text-zinc-500 dark:text-zinc-400">
           動作 {covered}/{report.behaviors.length} が証拠で覆われている
         </span>
-        <span className="ml-auto">
-          <Time iso={report.openedAt} />
-        </span>
+        {/* 折り返す行なので ml-auto を使わない — 折り返したときに時刻だけが単独の行に落ちる */}
+        <Time iso={report.openedAt} />
       </header>
 
       {report.submission !== undefined && (
@@ -196,19 +207,17 @@ function ReportCard({
           </p>
           {report.adoption !== undefined &&
             (report.adoption.entered ? (
-              <p
-                className="text-[12.5px] text-zinc-600 dark:text-zinc-300"
-                title="受け入れた sha が origin のデフォルトブランチの祖先(このマシンが最後に取得した時点の姿)"
-              >
-                ✓ {ENTERED_DEFAULT_BRANCH_LABEL}(origin/{report.adoption.defaultBranch})
-              </p>
+              <Hint text="受け入れた sha が origin のデフォルトブランチの祖先(このマシンが最後に取得した時点の姿)">
+                <p className="text-[12.5px] text-zinc-600 dark:text-zinc-300">
+                  ✓ {ENTERED_DEFAULT_BRANCH_LABEL}(origin/{report.adoption.defaultBranch})
+                </p>
+              </Hint>
             ) : (
-              <p
-                className="text-[12.5px] font-medium text-amber-800 dark:text-amber-200"
-                title="受け入れた sha がまだ origin のデフォルトブランチに入っていない"
-              >
-                ⏳ {AWAITING_ADOPTION_LABEL} — 人間の番です(PR 運用なら merge、main 直運用なら端末から push)
-              </p>
+              <Hint text="受け入れた sha がまだ origin のデフォルトブランチに入っていない">
+                <p className="text-[12.5px] font-medium text-amber-800 dark:text-amber-200">
+                  ⏳ {AWAITING_ADOPTION_LABEL} — 人間の番です(PR 運用なら merge、main 直運用なら端末から push)
+                </p>
+              </Hint>
             ))}
         </div>
       )}
@@ -256,9 +265,9 @@ function ReportCard({
                 </span>
                 <span className="min-w-0 flex-1 text-[13.5px] font-medium">{entry.behavior}</span>
                 {entry.change_kind !== undefined && (
-                  <TaxonomyChip title="変更の種類">{changeKindLabel(entry.change_kind)}</TaxonomyChip>
+                  <TaxonomyChip hint="変更の種類">{changeKindLabel(entry.change_kind)}</TaxonomyChip>
                 )}
-                <TaxonomyChip title="宣言した確かめ方">{checkLabel(entry.check)}</TaxonomyChip>
+                <TaxonomyChip hint="宣言した確かめ方">{checkLabel(entry.check)}</TaxonomyChip>
                 {verdict !== undefined ? (
                   <Chip
                     color={verdict.verdict === "ok" ? "success" : verdict.verdict === "ng" ? "danger" : "warning"}
@@ -345,7 +354,6 @@ function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail })
   const [note, setNote] = useState("");
   const { writing: busy, runWrite } = useWriteLock();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [outcome, setOutcome] = useState<string | null>(null);
 
   if (targets.length === 0) return null;
   const target = selected !== null && targets.includes(selected) ? selected : targets[0];
@@ -354,7 +362,6 @@ function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail })
   const command = `claude-gate confirm "${worksite}" --report "${report.title}" --behavior ${target} --note "確認した内容"`;
 
   const record = async () => {
-    setOutcome(null);
     await runWrite(async () => {
       try {
         const res = await fetch("/api/confirm", {
@@ -367,15 +374,15 @@ function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail })
             note: note.trim(),
           }),
         });
-        const body = (await res.json()) as { status: string; note?: string; reason?: string };
+        const body = (await res.json()) as { status: string; note?: string; reason?: string; fix?: string };
         if (body.status === "ok") {
-          setOutcome(`✓ ${body.note ?? "記録した"}`);
+          announceOk(body.note ?? "人間確認を記録した");
           setNote("");
         } else {
-          setOutcome(`✕ ${body.reason ?? "記録できなかった"}`);
+          announceFailure(body.reason ?? "人間確認を記録できなかった", body.fix);
         }
       } catch (error) {
-        setOutcome(`✕ 記録に失敗: ${String(error)}`);
+        announceFailure("人間確認を記録できなかった", String(error));
       }
     });
     setDialogOpen(false);
@@ -404,15 +411,15 @@ function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail })
           ))}
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-2">
-        <input
+      <div className="flex flex-wrap items-end gap-2">
+        <NoteField
           id={`confirm-note-${report.reportId}`}
           name="confirmNote"
-          className="min-w-0 flex-1 rounded-lg border border-black/15 bg-white/70 px-2.5 py-1.5 text-[13px] outline-none focus:border-amber-600/70 dark:border-white/15 dark:bg-white/5"
-          placeholder={`動作${target}を何でどう確認したか(記録の顔になる)`}
+          label={`動作${target}を何でどう確認したか`}
+          placeholder="記録の顔になる。例: シミュレータで開いて表示を目で確かめた"
           value={note}
           disabled={busy}
-          onChange={(e) => setNote(e.target.value)}
+          onChange={setNote}
         />
         <button
           className="cursor-pointer rounded-lg border border-amber-600/60 bg-amber-500/15 px-3 py-1.5 text-[13px] font-semibold text-amber-800 transition-colors hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-200"
@@ -422,7 +429,6 @@ function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail })
           {busy ? "記録中…" : `動作${target}を確認した`}
         </button>
       </div>
-      {outcome !== null && <p className="text-[12.5px] [overflow-wrap:anywhere]">{outcome}</p>}
       <details>
         <summary className="cursor-pointer text-xs text-zinc-500 dark:text-zinc-400">CLI で記録するなら</summary>
         <code className="mt-1 block font-mono text-[11.5px] break-all select-all text-zinc-600 dark:text-zinc-300">
@@ -456,10 +462,8 @@ function ConfirmForm({ report, detail }: { report: Report; detail: RepoDetail })
 function SubmitAction({ report, detail }: { report: Report; detail: RepoDetail }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const { writing: busy, runWrite } = useWriteLock();
-  const [outcome, setOutcome] = useState<string | null>(null);
 
   const run = async () => {
-    setOutcome(null);
     await runWrite(async () => {
       try {
         const res = await fetch("/api/submit", {
@@ -469,12 +473,12 @@ function SubmitAction({ report, detail }: { report: Report; detail: RepoDetail }
         });
         const body = (await res.json()) as { status: string; note?: string; reason?: string; fix?: string };
         if (body.status === "ok") {
-          setOutcome(`✓ ${body.note ?? "提出した"}`);
+          announceOk(body.note ?? "提出を記録した");
         } else {
-          setOutcome(`✕ ${body.reason ?? "提出できなかった"}${body.fix !== undefined ? ` — 直し方: ${body.fix}` : ""}`);
+          announceFailure(body.reason ?? "提出できなかった", body.fix);
         }
       } catch (error) {
-        setOutcome(`✕ 提出に失敗: ${String(error)}`);
+        announceFailure("提出できなかった", String(error));
       }
     });
     setDialogOpen(false);
@@ -501,7 +505,6 @@ function SubmitAction({ report, detail }: { report: Report; detail: RepoDetail }
           {busy ? "提出中…" : "提出する"}
         </button>
       </div>
-      {outcome !== null && <p className="text-[12.5px] [overflow-wrap:anywhere]">{outcome}</p>}
       {report.drift === undefined && report.branch === undefined && (
         <DeltaConfirmSection report={report} detail={detail} />
       )}
@@ -525,13 +528,9 @@ function SubmitAction({ report, detail }: { report: Report; detail: RepoDetail }
   );
 }
 
-// 差分確認の記録(POST /api/confirm-delta)。ずれバナーと旧報告向けフォームの共通処理
-async function postConfirmDelta(
-  repoKey: string,
-  reportId: string,
-  toSha: string,
-  note: string,
-): Promise<string> {
+// 差分確認の記録(POST /api/confirm-delta)。ずれの通知と旧報告向けフォームの共通処理。
+// 結果は Toast で伝える(成功したら true)
+async function postConfirmDelta(repoKey: string, reportId: string, toSha: string, note: string): Promise<boolean> {
   try {
     const res = await fetch("/api/confirm-delta", {
       method: "POST",
@@ -539,10 +538,15 @@ async function postConfirmDelta(
       body: JSON.stringify({ repoKey, reportId, toSha, note }),
     });
     const body = (await res.json()) as { status: string; note?: string; reason?: string; fix?: string };
-    if (body.status === "ok") return `✓ ${body.note ?? "記録した"}`;
-    return `✕ ${body.reason ?? "記録できなかった"}${body.fix !== undefined ? ` — 直し方: ${body.fix}` : ""}`;
+    if (body.status === "ok") {
+      announceOk(body.note ?? `${DELTA_CONFIRM_LABEL}を記録した`);
+      return true;
+    }
+    announceFailure(body.reason ?? `${DELTA_CONFIRM_LABEL}を記録できなかった`, body.fix);
+    return false;
   } catch (error) {
-    return `✕ 記録に失敗: ${String(error)}`;
+    announceFailure(`${DELTA_CONFIRM_LABEL}を記録できなかった`, String(error));
+    return false;
   }
 }
 
@@ -554,15 +558,13 @@ function DriftNotice({ report, detail }: { report: Report; detail: RepoDetail })
   const [note, setNote] = useState("");
   const { writing: busy, runWrite } = useWriteLock();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [outcome, setOutcome] = useState<string | null>(null);
   if (drift === undefined) return null;
   const sourceSha = report.judgment?.sourceSha ?? null;
 
   const record = async () => {
-    setOutcome(null);
     await runWrite(async () => {
-      setOutcome(await postConfirmDelta(detail.repoKey, report.reportId, drift.tip, note.trim()));
-      setNote("");
+      const ok = await postConfirmDelta(detail.repoKey, report.reportId, drift.tip, note.trim());
+      if (ok) setNote("");
     });
     setDialogOpen(false);
   };
@@ -594,15 +596,15 @@ function DriftNotice({ report, detail }: { report: Report; detail: RepoDetail })
             ))}
           </ul>
           {report.state === "passed" && (
-            <div className="flex flex-wrap items-center gap-2">
-              <input
+            <div className="flex flex-wrap items-end gap-2">
+              <NoteField
                 id={`drift-note-${report.reportId}`}
                 name="driftNote"
-                className="min-w-0 flex-1 rounded-lg border border-black/15 bg-white/70 px-2.5 py-1.5 text-[13px] outline-none focus:border-amber-600/70 dark:border-white/15 dark:bg-white/5"
-                placeholder="差分の何を見てどう判断したか(記録の顔になる)"
+                label="差分の何を見てどう判断したか"
+                placeholder="記録の顔になる。例: 積まれたコミットは記事の文面だけで、動作に触れていない"
                 value={note}
                 disabled={busy}
-                onChange={(e) => setNote(e.target.value)}
+                onChange={setNote}
               />
               <button
                 className="cursor-pointer rounded-lg border border-amber-600/60 bg-amber-500/15 px-3 py-1.5 text-[13px] font-semibold text-amber-800 transition-colors hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-200"
@@ -613,7 +615,6 @@ function DriftNotice({ report, detail }: { report: Report; detail: RepoDetail })
               </button>
             </div>
           )}
-          {outcome !== null && <p className="text-[12.5px] [overflow-wrap:anywhere]">{outcome}</p>}
           <ActionDialog
             open={dialogOpen}
             title={`${DELTA_CONFIRM_LABEL}を記録しますか?`}
@@ -655,7 +656,6 @@ function DeltaConfirmSection({ report, detail }: { report: Report; detail: RepoD
   const [note, setNote] = useState("");
   const { writing: busy, runWrite } = useWriteLock();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [outcome, setOutcome] = useState<string | null>(null);
 
   const loadPreview = async () => {
     try {
@@ -668,29 +668,10 @@ function DeltaConfirmSection({ report, detail }: { report: Report; detail: RepoD
 
   const record = async () => {
     if (preview === null || "error" in preview) return;
-    setOutcome(null);
+    const toSha = preview.toSha;
     await runWrite(async () => {
-      try {
-        const res = await fetch("/api/confirm-delta", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            repoKey: detail.repoKey,
-            reportId: report.reportId,
-            toSha: preview.toSha,
-            note: note.trim(),
-          }),
-        });
-        const body = (await res.json()) as { status: string; note?: string; reason?: string; fix?: string };
-        if (body.status === "ok") {
-          setOutcome(`✓ ${body.note ?? "記録した"}`);
-          setNote("");
-        } else {
-          setOutcome(`✕ ${body.reason ?? "記録できなかった"}${body.fix !== undefined ? ` — 直し方: ${body.fix}` : ""}`);
-        }
-      } catch (error) {
-        setOutcome(`✕ 記録に失敗: ${String(error)}`);
-      }
+      const ok = await postConfirmDelta(detail.repoKey, report.reportId, toSha, note.trim());
+      if (ok) setNote("");
     });
     setDialogOpen(false);
   };
@@ -747,15 +728,15 @@ function DeltaConfirmSection({ report, detail }: { report: Report; detail: RepoD
                 </li>
               ))}
             </ul>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
+            <div className="flex flex-wrap items-end gap-2">
+              <NoteField
                 id={`delta-note-${report.reportId}`}
                 name="deltaNote"
-                className="min-w-0 flex-1 rounded-lg border border-black/15 bg-white/70 px-2.5 py-1.5 text-[13px] outline-none focus:border-amber-600/70 dark:border-white/15 dark:bg-white/5"
-                placeholder="差分の何を見てどう判断したか(記録の顔になる)"
+                label="差分の何を見てどう判断したか"
+                placeholder="記録の顔になる。例: 積まれたコミットは記事の文面だけで、動作に触れていない"
                 value={note}
                 disabled={busy}
-                onChange={(e) => setNote(e.target.value)}
+                onChange={setNote}
               />
               <button
                 className="cursor-pointer rounded-lg border border-amber-600/60 bg-amber-500/15 px-3 py-1.5 text-[13px] font-semibold text-amber-800 transition-colors hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-200"
@@ -767,7 +748,6 @@ function DeltaConfirmSection({ report, detail }: { report: Report; detail: RepoD
             </div>
           </>
         )}
-        {outcome !== null && <p className="text-[12.5px] [overflow-wrap:anywhere]">{outcome}</p>}
       </div>
       {preview !== null && !("error" in preview) && (
         <ActionDialog

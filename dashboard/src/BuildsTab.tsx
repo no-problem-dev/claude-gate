@@ -1,12 +1,15 @@
 import { Card, Chip } from "@heroui/react";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { Build, Evidence, RepoDetail, buildTitle, eventSentence, formatTime } from "./lib";
 import {
   AcceptBadge,
+  BUILD_DOT_EXPLANATION,
   BuildDot,
+  DIRTY_EXPLANATION,
   DirtyChip,
   EvidenceThumb,
   Fact,
+  Hint,
   RejectBadge,
   SectionTitle,
   Time,
@@ -37,6 +40,8 @@ export function BuildsTab({
   }, [detail.evidence]);
 
   const selected = detail.builds.find((b) => b.buildId === selectedBuildId) ?? null;
+  // 1カラム(1024px 未満)では詳細が一覧の下に来るので、一覧へ戻る導線を詳細に置く
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   if (detail.builds.length === 0) {
     return <p className="p-6 text-zinc-500 dark:text-zinc-400">登録されたビルドはまだありません</p>;
@@ -44,6 +49,7 @@ export function BuildsTab({
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(260px,340px)_1fr]">
+      <div ref={listRef} className="scroll-mt-4">
       <Card className="overflow-hidden p-0">
         <ol aria-label="ビルド一覧">
           {detail.builds.map((build, i) => {
@@ -77,6 +83,7 @@ export function BuildsTab({
           })}
         </ol>
       </Card>
+      </div>
 
       {selected !== null && (
         <BuildDetail
@@ -84,6 +91,7 @@ export function BuildsTab({
           evidence={evidenceByBuild.get(selected.buildId) ?? []}
           detail={detail}
           onOpenEvidence={onOpenEvidence}
+          onBackToList={() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
         />
       )}
     </div>
@@ -95,20 +103,34 @@ function BuildDetail({
   evidence,
   detail,
   onOpenEvidence,
+  onBackToList,
 }: {
   build: Build;
   evidence: Evidence[];
   detail: RepoDetail;
   onOpenEvidence: (evidenceId: string) => void;
+  onBackToList: () => void;
 }) {
   const ownEvents = detail.events.filter((e) => e.buildId === build.buildId);
 
   return (
     <Card className="min-w-0 p-5" aria-label="ビルドの詳細">
+      <button
+        className="mb-2 w-fit cursor-pointer text-xs text-zinc-600 underline-offset-2 hover:underline lg:hidden dark:text-zinc-300"
+        onClick={onBackToList}
+      >
+        ↑ ビルド一覧へ戻る
+      </button>
       <header className="flex flex-wrap items-center gap-2.5">
-        <BuildDot buildId={build.buildId} size={12} />
+        <Hint text={BUILD_DOT_EXPLANATION}>
+          <BuildDot buildId={build.buildId} size={12} />
+        </Hint>
         <h3 className="text-base font-semibold">{buildTitle(build)}</h3>
-        {build.dirty && <DirtyChip />}
+        {build.dirty && (
+          <Hint text={DIRTY_EXPLANATION}>
+            <DirtyChip />
+          </Hint>
+        )}
       </header>
 
       <dl className="mt-3 flex flex-wrap gap-x-7 gap-y-2">
@@ -118,9 +140,9 @@ function BuildDetail({
         </Fact>
         <Fact label="登録">{formatTime(build.registeredAt)}</Fact>
         <Fact label="ビルドID">
-          <span className="font-mono" title={build.buildIdFull}>
-            {build.buildId}
-          </span>
+          <Hint text={`完全なビルドID: ${build.buildIdFull}`}>
+            <span className="font-mono">{build.buildId}</span>
+          </Hint>
         </Fact>
       </dl>
 

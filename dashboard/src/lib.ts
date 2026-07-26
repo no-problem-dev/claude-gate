@@ -205,9 +205,21 @@ export interface RepoDetail {
   unresolvedRejections: GateEvent[]; // 新しい順(events と同じ向き)
 }
 
+// デーモンが答えた上でのエラー。通信そのものの失敗(デーモンに届かない)と区別するために型を分ける —
+// 全部まとめて「デーモン応答なし」にすると、記録が無いのか繋がらないのかを人が切り分けられない
+export class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly path: string,
+  ) {
+    super(`${path}: ${status}`);
+    this.name = "HttpError";
+  }
+}
+
 export async function fetchJson<T>(path: string): Promise<T> {
   const res = await fetch(path);
-  if (!res.ok) throw new Error(`${path}: ${res.status}`);
+  if (!res.ok) throw new HttpError(res.status, path);
   return (await res.json()) as T;
 }
 

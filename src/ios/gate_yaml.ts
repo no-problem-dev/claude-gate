@@ -18,6 +18,10 @@ const schema = z
   .object({
     env: z.array(z.string()).default([]),
     worksite: z.array(z.string()).default([]),
+    // 動かしても出荷物の振る舞いが変わらない道筋(glob)。取り込みガード hook が
+    // 「差分がこの中だけか」を数えるのに使う。**宣言は「証拠が要らない」の申告ではなく、
+    // 数える対象の宣言** — 1ファイルでも外に出れば通常の照合に落ちる。
+    inert: z.array(z.string()).default([]),
     checks: z.record(z.enum(RUNNABLE_CHECKS), z.string()).default({}),
     passline: z.record(z.enum(CHANGE_KINDS), z.array(z.enum(CHECK_KINDS))).default({}),
     cannot_see: z
@@ -36,6 +40,7 @@ const schema = z
 export interface GateYaml {
   env: string[];
   worksite: string[];
+  inert: string[];
   checks: Partial<Record<RunnableCheck, string>>;
   passlineOverride: Partial<Passline>;
   cannotSeeExtra: CannotSeeEntry[];
@@ -43,7 +48,7 @@ export interface GateYaml {
 
 export type GateYamlResult = { config: GateYaml | null; error?: undefined } | { config?: undefined; error: string };
 
-const EMPTY: GateYaml = { env: [], worksite: [], checks: {}, passlineOverride: {}, cannotSeeExtra: [] };
+const EMPTY: GateYaml = { env: [], worksite: [], inert: [], checks: {}, passlineOverride: {}, cannotSeeExtra: [] };
 
 // worksitePath から gate.yaml を読む。無ければ null(デフォルトで動く)、壊れていれば error(隠さない)
 export function loadGateYaml(worksitePath: string): GateYamlResult {
@@ -67,6 +72,7 @@ export function loadGateYaml(worksitePath: string): GateYamlResult {
     config: {
       env: parsed.data.env,
       worksite: parsed.data.worksite,
+      inert: parsed.data.inert,
       checks: parsed.data.checks,
       passlineOverride: parsed.data.passline,
       cannotSeeExtra: parsed.data.cannot_see,

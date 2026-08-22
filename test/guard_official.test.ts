@@ -207,6 +207,31 @@ describe("レビュー可能化は提出の記録との照合で決まる(デー
   });
 });
 
+describe("コメント行は命令ではない", () => {
+  // ゲート自身を文書化するとき、コミットメッセージや heredoc の中に語彙が出てくる。
+  // 行頭が # の行はシェルが実行しないので、照合の対象から外す(誤検知を減らす)。
+  // **見逃しを増やしてはいけない** — 行の途中の # から先は落とさない
+
+  it("コメント行に書かれただけの merge は遮断しない", () => {
+    const command = ['git commit -q -F - <<EOF', "# 取り込みは gh pr merge ではなく人間がやる", "EOF"].join("\n");
+    expect(runHook(command).status).toBe(0);
+  });
+
+  it("コメント行に書かれただけのレビュー可能化は遮断しない", () => {
+    const command = ["git add -A", "# ガードは gh pr ready のときに差分を数える", 'git commit -q -m "docs"'].join("\n");
+    expect(runHook(command).status).toBe(0);
+  });
+
+  it("コメント行があっても、同じ入力の実コマンドは遮断する", () => {
+    const command = ["# gh pr merge の説明", "gh pr merge 12"].join("\n");
+    expect(runHook(command).status).toBe(2);
+  });
+
+  it("行の途中の # から先は落とさない(見逃しを作らない)", () => {
+    expect(runHook('git commit -m "fix #1" && gh pr merge 5').status).toBe(2);
+  });
+});
+
 describe("振る舞いに触れていない差分(gate.yaml の inert)", () => {
   // **照会に到達する経路はスタブを立てる。** 立てないと「手元でデーモンが動いているか」で
   // 結果が変わり、ローカル緑・CI 赤になる(実際にそれで落ちた)。inert で通る経路は

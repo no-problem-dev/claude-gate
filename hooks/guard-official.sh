@@ -17,6 +17,16 @@ INPUT=$(cat)
 COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
 [ -n "$COMMAND" ] || exit 0
 
+# 照合と抽出は「コメント行を落とした写し」に対して行う。**行頭(空白を除く先頭)が # の行は
+# シェルが実行しない** —— 説明文か heredoc の中身であって、命令ではない。
+# 実際、ゲート自身を文書化するコミットメッセージに `gh pr ready` と書いただけで遮断された。
+#
+# **行の途中の # から先は落とさない。** 落とすと
+# `git commit -m "fix #1" && gh pr merge 5` の後半が消え、遮断すべきものが素通りする。
+# 減らすのは誤検知だけで、見逃しを増やしてはいけない。
+COMMAND=$(printf '%s' "$COMMAND" | grep -v '^[[:space:]]*#' || true)
+[ -n "$COMMAND" ] || exit 0
+
 # git / gh を含まないコマンドは対象外
 printf '%s' "$COMMAND" | grep -qE '(^|[;&|[:space:]])(git|gh)[[:space:]]' || exit 0
 

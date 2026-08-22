@@ -208,8 +208,17 @@ describe("レビュー可能化は提出の記録との照合で決まる(デー
 });
 
 describe("振る舞いに触れていない差分(gate.yaml の inert)", () => {
+  // **照会に到達する経路はスタブを立てる。** 立てないと「手元でデーモンが動いているか」で
+  // 結果が変わり、ローカル緑・CI 赤になる(実際にそれで落ちた)。inert で通る経路は
+  // 照会の手前で exit 0 するので、スタブが無くても決定論的に通る。
+  let server: Server | null = null;
+
+  afterEach(() => {
+    server?.close();
+    server = null;
+  });
+
   // inert を宣言し、feature ブランチに1コミット積むヘルパー。
-  // デーモンは立てない — 通るなら照会に行く前に通っているはず(遮断なら「照会できない」で落ちる)
   function branchTouching(files: Record<string, string>, inert: string[]): void {
     writeFileSync(join(worksite, "gate.yaml"), `inert:\n${inert.map((p) => `  - "${p}"`).join("\n")}\nchecks: {}\n`);
     execFileSync("git", ["-C", worksite, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-am", "declare inert"]);
@@ -236,20 +245,28 @@ describe("振る舞いに触れていない差分(gate.yaml の inert)", () => {
     expect(runHook("gh pr ready feature/foo").status).toBe(0);
   });
 
-  it("1ファイルでも inert の外に出ていれば通常の照合に落ちる", () => {
+  it("1ファイルでも inert の外に出ていれば通常の照合に落ちる", async () => {
     branchTouching({ "README.md": "# hi\n", "src/main.ts": "export {}\n" }, ["README.md"]);
-    const result = runHook("gh pr ready feature/foo");
+    const stub = await submittedStub(false);
+    server = stub.server;
+    const result = await runHookAsync("gh pr ready feature/foo", stub.port);
     expect(result.status).toBe(2);
+    expect(result.stderr).toContain("提出済みの報告が無い");
     // 何が塞いだのかを名指しする(直す判断がこの一行で下せる)
     expect(result.stderr).toContain("src/main.ts");
   });
 
-  it("inert を宣言していないリポジトリは今までどおり照合に行く", () => {
+  it("inert を宣言していないリポジトリは今までどおり照合に行く", async () => {
     git("checkout", "-q", "-b", "feature/foo");
     writeFileSync(join(worksite, "README.md"), "# hi\n");
     git("add", "-A");
     execFileSync("git", ["-C", worksite, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "docs"]);
-    expect(runHook("gh pr ready feature/foo").status).toBe(2);
+    const stub = await submittedStub(false);
+    server = stub.server;
+    const result = await runHookAsync("gh pr ready feature/foo", stub.port);
+    expect(result.status).toBe(2);
+    // inert を書いていないので、塞いだファイルの名指しは付かない
+    expect(result.stderr).not.toContain("inert の外に出ている");
   });
 
   it("inert があっても merge は人間だけのまま", () => {

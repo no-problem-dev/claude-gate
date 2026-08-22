@@ -76,6 +76,56 @@ if has '(^|[;&|[:space:]])gh[[:space:]]+pr[[:space:]]+ready([[:space:]]|$)'; the
   [ -n "${READY_BRANCH}" ] || deny "このリポジトリ($ROOT)はゲート運用。レビュー可能化の対象ブランチを解決できない。"
   READY_SHA=$(git -C "$WORKDIR" rev-parse --verify "refs/heads/${READY_BRANCH}^{commit}" 2>/dev/null || true)
   [ -n "${READY_SHA}" ] || deny "このリポジトリ($ROOT)はゲート運用。ブランチ「${READY_BRANCH}」の先端を解決できない(ローカルにブランチがあるか確認する)。"
+
+  # --- 出荷される振る舞いに触れていないなら、確かめるものが無い ---
+  # gate.yaml の inert に「動かしても出荷物の振る舞いが変わらない道筋」を宣言できる。
+  # **宣言を信じるのではなく、ゲートが差分を数える** — 変わったファイルが1つでも inert の
+  # 外に出ていれば、この道は閉じて通常の照合に落ちる。
+  #
+  # これが無いと、README だけの変更が永久にレビュー可能化できない(証拠の語彙に文書の
+  # 居場所が無く、judge は「確認できず」しか返せない)。人間に押させて回避すると、
+  # ゲートは「守ると仕事が進まないもの」になり、いずれ全体が外される。
+  #
+  # 照合は文字列の glob。**`*` はディレクトリ区切りも跨ぐ**(bash の [[ == ]] の意味論)。
+  # 差分やベースを計算できないときは何もしない(遮断側に倒す)。
+  INERT_BLOCKER=""
+  INERT_PATTERNS=$(sed -n '/^inert:[[:space:]]*$/,/^[^[:space:]#-]/p' "$ROOT/gate.yaml" 2>/dev/null |
+    sed -nE 's/^[[:space:]]*-[[:space:]]*//p' | sed -E 's/[[:space:]]*#.*$//; s/^"(.*)"$/\1/; s/^'"'"'(.*)'"'"'$/\1/' |
+    sed '/^$/d')
+  if [ -n "${INERT_PATTERNS}" ]; then
+    INERT_DEFAULT=$(git -C "$WORKDIR" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
+    INERT_BASE=""
+    for CAND in ${INERT_DEFAULT:-} main master develop; do
+      for REF in "refs/remotes/origin/${CAND}" "refs/heads/${CAND}"; do
+        B=$(git -C "$WORKDIR" merge-base "$REF" "${READY_SHA}" 2>/dev/null) || continue
+        [ -n "$B" ] && { INERT_BASE="$B"; break 2; }
+      done
+    done
+    if [ -n "${INERT_BASE}" ]; then
+      CHANGED=$(git -C "$WORKDIR" diff --name-only "${INERT_BASE}" "${READY_SHA}" 2>/dev/null || true)
+      if [ -n "${CHANGED}" ]; then
+        while IFS= read -r F; do
+          [ -n "$F" ] || continue
+          MATCHED=0
+          while IFS= read -r P; do
+            [ -n "$P" ] || continue
+            # shellcheck disable=SC2053
+            if [[ "$F" == $P ]]; then MATCHED=1; break; fi
+          done <<EOF_INERT
+${INERT_PATTERNS}
+EOF_INERT
+          if [ "$MATCHED" -eq 0 ]; then INERT_BLOCKER="$F"; break; fi
+        done <<EOF_CHANGED
+${CHANGED}
+EOF_CHANGED
+        if [ -z "${INERT_BLOCKER}" ]; then
+          echo "ゲート($ROOT): ブランチ「${READY_BRANCH}」の差分($(printf '%s\n' "${CHANGED}" | sed '/^$/d' | wc -l | tr -d ' ') ファイル)は gate.yaml の inert に宣言された道筋だけ。出荷される振る舞いに触れていないので確かめるものが無い — レビュー可能化を通す。" >&2
+          exit 0
+        fi
+      fi
+    fi
+  fi
+
   RESP=$(curl -fsS --max-time 3 --get \
     --data-urlencode "path=$WORKDIR" --data-urlencode "sha=${READY_SHA}" \
     "http://127.0.0.1:${GATE_PORT:-7350}/api/submitted" 2>/dev/null) ||
@@ -83,7 +133,7 @@ if has '(^|[;&|[:space:]])gh[[:space:]]+pr[[:space:]]+ready([[:space:]]|$)'; the
   if [ "$(printf '%s' "$RESP" | jq -r '.submitted' 2>/dev/null)" = "true" ]; then
     exit 0 # ブランチ先端が提出済みの報告と一致 — レビュー可能化はエージェント自身が行ってよい
   fi
-  deny "このリポジトリ($ROOT)はゲート運用。ブランチ「${READY_BRANCH}」の先端($(printf '%s' "${READY_SHA}" | cut -c1-7))に一致する提出済みの報告が無い — judge で合格させ、submit で提出を記録してから gh pr ready を実行する。"
+  deny "このリポジトリ($ROOT)はゲート運用。ブランチ「${READY_BRANCH}」の先端($(printf '%s' "${READY_SHA}" | cut -c1-7))に一致する提出済みの報告が無い${INERT_BLOCKER:+(inert の外に出ているファイル: ${INERT_BLOCKER})} — judge で合格させ、submit で提出を記録してから gh pr ready を実行する。"
 fi
 
 # --- PR の作成は下書きだけ(レビュー依頼が飛ぶ非ドラフト作成はレビュー可能化と同じ) ---

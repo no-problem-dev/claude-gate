@@ -1,5 +1,5 @@
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -204,6 +204,67 @@ describe("レビュー可能化は提出の記録との照合で決まる(デー
     const result = await runHookAsync("gh pr ready feature/foo", deadPort);
     expect(result.status).toBe(2);
     expect(result.stderr).toContain("照会できない");
+  });
+});
+
+describe("振る舞いに触れていない差分(gate.yaml の inert)", () => {
+  // inert を宣言し、feature ブランチに1コミット積むヘルパー。
+  // デーモンは立てない — 通るなら照会に行く前に通っているはず(遮断なら「照会できない」で落ちる)
+  function branchTouching(files: Record<string, string>, inert: string[]): void {
+    writeFileSync(join(worksite, "gate.yaml"), `inert:\n${inert.map((p) => `  - "${p}"`).join("\n")}\nchecks: {}\n`);
+    execFileSync("git", ["-C", worksite, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-am", "declare inert"]);
+    git("update-ref", "refs/remotes/origin/develop", "HEAD");
+    git("checkout", "-q", "-b", "feature/foo");
+    for (const [name, body] of Object.entries(files)) {
+      const full = join(worksite, name);
+      mkdirSync(dirname(full), { recursive: true });
+      writeFileSync(full, body);
+    }
+    git("add", "-A");
+    execFileSync("git", ["-C", worksite, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "change"]);
+  }
+
+  it("inert の中だけの差分は、提出の記録が無くても通す", () => {
+    branchTouching({ "README.md": "# hi\n" }, ["README.md", "docs/*"]);
+    const result = runHook("gh pr ready feature/foo");
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain("inert");
+  });
+
+  it("* はディレクトリ区切りを跨ぐ", () => {
+    branchTouching({ "docs/a/b/c.md": "x\n" }, ["docs/*"]);
+    expect(runHook("gh pr ready feature/foo").status).toBe(0);
+  });
+
+  it("1ファイルでも inert の外に出ていれば通常の照合に落ちる", () => {
+    branchTouching({ "README.md": "# hi\n", "src/main.ts": "export {}\n" }, ["README.md"]);
+    const result = runHook("gh pr ready feature/foo");
+    expect(result.status).toBe(2);
+    // 何が塞いだのかを名指しする(直す判断がこの一行で下せる)
+    expect(result.stderr).toContain("src/main.ts");
+  });
+
+  it("inert を宣言していないリポジトリは今までどおり照合に行く", () => {
+    git("checkout", "-q", "-b", "feature/foo");
+    writeFileSync(join(worksite, "README.md"), "# hi\n");
+    git("add", "-A");
+    execFileSync("git", ["-C", worksite, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "docs"]);
+    expect(runHook("gh pr ready feature/foo").status).toBe(2);
+  });
+
+  it("inert があっても merge は人間だけのまま", () => {
+    branchTouching({ "README.md": "# hi\n" }, ["README.md"]);
+    expect(runHook("gh pr merge feature/foo").status).toBe(2);
+  });
+
+  it("inert があっても非ドラフト PR の作成は遮断する", () => {
+    branchTouching({ "README.md": "# hi\n" }, ["README.md"]);
+    expect(runHook("gh pr create --title x --body y").status).toBe(2);
+  });
+
+  it("inert があってもデフォルトブランチへの直 push は遮断する", () => {
+    branchTouching({ "README.md": "# hi\n" }, ["README.md"]);
+    expect(runHook("git push origin develop").status).toBe(2);
   });
 });
 

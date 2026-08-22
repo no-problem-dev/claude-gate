@@ -30,6 +30,9 @@ describe("loadGateYaml", () => {
         '  - "Debug は wrangler dev が必要"',
         "worksite:",
         '  - "xcodegen generate"',
+        "inert:",
+        '  - "README.md"',
+        '  - "docs/*"',
         "checks:",
         '  unit_test: "swift test"',
         "passline:",
@@ -44,10 +47,18 @@ describe("loadGateYaml", () => {
     const result = loadGateYaml(worksite);
     if (result.config === undefined || result.config === null) throw new Error("expected config");
     expect(result.config.env.length).toBe(1);
+    expect(result.config.inert).toEqual(["README.md", "docs/*"]);
     expect(result.config.checks.unit_test).toBe("swift test");
     expect(effectivePassline(result.config).logic).toEqual(["unit_test"]);
     expect(effectivePassline(result.config).appearance).toEqual(DEFAULT_PASSLINE.appearance); // 書いてない種類は同梱のまま
     expect(effectiveCannotSee(result.config).length).toBe(BUNDLED_CANNOT_SEE.length + 1);
+  });
+
+  it("inert を書いていなければ空(既存のリポジトリは何も変わらない)", () => {
+    writeFileSync(join(worksite, "gate.yaml"), 'checks:\n  unit_test: "swift test"\n');
+    const result = loadGateYaml(worksite);
+    if (result.config === undefined || result.config === null) throw new Error("expected config");
+    expect(result.config.inert).toEqual([]);
   });
 
   it("壊れた YAML・語彙外の値はエラーになる(隠さない)", () => {
